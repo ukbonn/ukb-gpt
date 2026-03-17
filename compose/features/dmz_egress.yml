@@ -1,0 +1,7 @@
+networks:
+  # Routed bridge used only when an egress airlock is enabled.
+  dmz_egress:
+    driver: bridge
+    internal: false
+    driver_opts:
+      com.docker.network.bridge.name: br-dmz-egress

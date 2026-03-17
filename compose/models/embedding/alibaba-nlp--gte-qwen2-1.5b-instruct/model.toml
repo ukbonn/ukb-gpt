@@ -1,0 +1,48 @@
+[model]
+id = "model.embedding.alibaba_nlp_gte_qwen2_1_5b"
+role = "embedding"
+title = "Alibaba-NLP gte-Qwen2-1.5B-instruct"
+summary = "Dedicated embedding backend family."
+base_compose_file = "compose/models/embedding/alibaba-nlp--gte-qwen2-1.5b-instruct/base.yml"
+base_service = "gte_qwen_embedding_worker_template"
+order = 10
+wizard_enabled = true
+accelerator = "nvidia"
+supports_expert_parallel = false
+
+[runtime]
+command = [
+  "--port=5000",
+  "--host=0.0.0.0",
+  "--model=Alibaba-NLP/gte-Qwen2-1.5B-instruct",
+  "--runner=pooling",
+  "--trust-remote-code",
+  "--max-model-len=${VLLM_EMBEDDING_MAX_MODEL_LEN:-32000}",
+  "--gpu-memory-utilization=${VLLM_EMBEDDING_GPU_MEMORY_UTILIZATION:-0.90}",
+]
+default_vllm_openai_image = "vllm/vllm-openai:v0.14.0"
+build_args = { VLLM_OPENAI_IMAGE = "${VLLM_OPENAI_IMAGE_EMBEDDING:-${VLLM_OPENAI_IMAGE:-vllm/vllm-openai:v0.14.0}}" }
+shm_size = "16gb"
+
+[architectures.default]
+
+[[variables]]
+id = "VLLM_OPENAI_IMAGE_EMBEDDING"
+prompt_order = 10
+prompt = true
+description = "Worker image override for this embedding family."
+examples = ["vllm/vllm-openai:v0.14.0"]
+
+[[variables]]
+id = "VLLM_EMBEDDING_MAX_MODEL_LEN"
+prompt_order = 20
+prompt = true
+description = "Optional max model length override for embedding workers."
+examples = ["32000"]
+
+[[variables]]
+id = "VLLM_EMBEDDING_GPU_MEMORY_UTILIZATION"
+prompt_order = 30
+prompt = true
+description = "Optional GPU memory utilization fraction override for embedding workers."
+examples = ["0.90"]

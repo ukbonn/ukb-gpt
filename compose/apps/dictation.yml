@@ -1,0 +1,32 @@
+services:
+  # ============================================================================
+  # DICTATION APP (Dedicated internal STT UI)
+  # ============================================================================
+  dictation:
+    extends:
+      file: ./hardening.yml
+      service: hardened_common
+    build:
+      context: ..
+      dockerfile: apps/dictation/Dockerfile
+    container_name: ukbgpt_dictation
+    environment:
+      - "DICTATION_STT_BASE_URL=http://${STT_ENDPOINT:?Error: STT endpoint discovery failed; enable STT_MODEL_DEPLOYMENT_CONFIG}/v1"
+      - "DICTATION_STT_MODEL=${STT_MODEL_ID:-mistralai/Voxtral-Mini-4B-Realtime-2602}"
+      - "DICTATION_ROOT_PATH=/dictation"
+      - "DICTATION_PORT=7860"
+      - "DICTATION_POSTPROC_CONFIG_PATH=/app/dictation_postprocessing.json"
+      - "DICTATION_LLM_BASE_URL=http://${PRIMARY_OPENAI_ENDPOINT:-backend_router:5000}/v1"
+      - "DICTATION_TRANSLATION_PROMPT_PATH=/app/translate_prompt.txt"
+      - "GRADIO_ANALYTICS_ENABLED=False"
+      - "PYTHONDONTWRITEBYTECODE=1"
+      - "PYTHONUNBUFFERED=1"
+    networks:
+      - docker_internal
+    depends_on:
+      - ingress
+    restart: on-failure
+    read_only: false
+    tmpfs:
+      - /tmp
+      - /run

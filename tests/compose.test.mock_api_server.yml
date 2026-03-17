@@ -1,0 +1,36 @@
+services:
+  # ============================================================================
+  # MOCK API SERVER (Simulated Intranet LLM Endpoint)
+  # ============================================================================
+  # Represents the corporate LLM API reachable only via the dmz_egress airlock.
+  mock_api_server:
+    build:
+      context: ..
+      dockerfile: images/dummy_vllm_worker/Dockerfile
+      args:
+        DUMMY_VLLM_WORKER_IMAGE: "${DUMMY_VLLM_WORKER_IMAGE:-python:3.11-slim}"
+    container_name: ukbgpt_mock_api
+    volumes:
+      # Use the same PKI chain generated for the test root CA.
+      - ${TEST_ARTIFACTS_PATH:?err}/test_fullchain.pem:/server_fullchain.pem
+      - ${TEST_ARTIFACTS_PATH:?err}/test_server.key:/server.key
+      # Entry script for the mock API + TLS wrapper.
+      - ./mock_api_server_entrypoint.sh:/usr/local/bin/mock_api_server_entrypoint.sh:ro
+    # Disable active isolation for the mock external API server.
+    # This is an "external" system in the test and should not be killed by the supervisor.
+    entrypoint: ["/bin/sh", "/usr/local/bin/mock_api_server_entrypoint.sh"]
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import socket; s=socket.create_connection(('127.0.0.1', 8443), 2); s.close()\""]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+    networks:
+      dmz_egress:
+        ipv4_address: ${MOCK_API_IP:?err}
+
+networks:
+  # Reuse the same dmz_egress network as the api_egress proxy.
+  # This avoids inter-bridge routing complexity during tests.
+  dmz_egress:
+    external: true
+    name: ukbgpt_dmz_egress

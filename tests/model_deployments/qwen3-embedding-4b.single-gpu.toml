@@ -1,0 +1,9 @@
+api_version = "ukbgpt/v1alpha1"
+kind = "model_deployment"
+role = "embedding"
+model_family = "model.embedding.qwen_qwen3_embedding_4b"
+gpu_architecture = "auto"
+router = "auto"
+
+[[workers]]
+gpus = [0]

@@ -1,0 +1,9 @@
+api_version = "ukbgpt/v1alpha1"
+kind = "model_deployment"
+role = "stt"
+model_family = "model.stt.testing.mock"
+gpu_architecture = "default"
+router = "auto"
+
+[[workers]]
+gpus = []

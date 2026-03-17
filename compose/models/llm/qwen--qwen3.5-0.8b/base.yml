@@ -1,0 +1,8 @@
+services:
+  qwen3_0_8b_worker_template:
+    extends:
+      file: ../../../model.base.yml
+      service: base_worker_template
+    build:
+      context: ../../../..
+      dockerfile: images/vllm_worker/Dockerfile

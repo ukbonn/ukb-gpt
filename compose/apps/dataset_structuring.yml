@@ -1,0 +1,62 @@
+services:
+  # ============================================================================
+  # DATASET STRUCTURING APP (On-demand batch jobs via docker exec)
+  # ============================================================================
+  # ROLE:
+  #   - Internal-only worker utility container for A/B/C dataset structuring runs.
+  #   - Kept alive (sleep infinity); users trigger jobs manually with docker exec.
+  #
+  # SECURITY:
+  #   - No host ports.
+  #   - docker_internal only (no routed gateway).
+  #   - Same hardened baseline as other services.
+  dataset_structuring:
+    extends:
+      file: ./hardening.yml
+      service: hardened_common
+    build:
+      context: ..
+      dockerfile: apps/dataset_structuring/Dockerfile
+    container_name: ukbgpt_dataset_structuring
+    environment:
+      - "BATCH_CLIENT_LISTEN_PORT=${BATCH_CLIENT_LISTEN_PORT:-30000}"
+      - "SERVER_NAME=${SERVER_NAME:-127.0.0.1}"
+      - "UKBGPT_RUNTIME_DISCOVERY_URL=http://ingress:${BATCH_CLIENT_LISTEN_PORT:-30000}/v1/ukbgpt/runtime"
+      - "EMBEDDING_API_URL=http://ingress:${BATCH_CLIENT_LISTEN_PORT:-30000}/v1/embeddings"
+      - "API_KEY=${API_KEY:-}"
+      - "EMBEDDING_API_KEY=${EMBEDDING_API_KEY:-}"
+      - "PYTHONDONTWRITEBYTECODE=1"
+      - "PYTHONUNBUFFERED=1"
+      - "TOKENIZERS_PARALLELISM=false"
+      - "XDG_CACHE_HOME=/tmp/.cache"
+      # Optional custom trust bundle for external HTTPS endpoints when needed.
+      - "ROOT_CA_PATH=${ROOT_CA_PATH:-}"
+    volumes:
+      - type: bind
+        source: "${DATASET_STRUCTURING_DATA_ROOT:?Error: DATASET_STRUCTURING_DATA_ROOT must be set when ENABLE_DATASET_STRUCTURING_APP=true}"
+        target: /data
+        read_only: false
+      - type: bind
+        source: ../apps/dataset_structuring/config
+        target: /app/dataset_structuring/config
+        read_only: true
+    networks:
+      - docker_internal
+    depends_on:
+      - ingress
+    restart: on-failure
+    # Resource guardrails to avoid host-wide starvation during aggressive worker settings.
+    # start.py auto-derives defaults when ENABLE_DATASET_STRUCTURING_APP=true:
+    # - DATASET_STRUCTURING_CPUSET: all CPUs except CPU0
+    # - DATASET_STRUCTURING_MEM_LIMIT: ~90% of host RAM
+    cpuset: "${DATASET_STRUCTURING_CPUSET:?Error: DATASET_STRUCTURING_CPUSET must be set (start.py auto-derives default all CPUs except CPU0)}"
+    mem_limit: "${DATASET_STRUCTURING_MEM_LIMIT:?Error: DATASET_STRUCTURING_MEM_LIMIT must be set (start.py auto-derives default ~90% RAM)}"
+    read_only: false
+    tmpfs:
+      - /tmp
+      - /run
+    ulimits:
+      nofile:
+        soft: ${DATASET_STRUCTURING_NOFILE_SOFT:-8192}
+        hard: ${DATASET_STRUCTURING_NOFILE_HARD:-8192}
+    command: ["sleep", "infinity"]

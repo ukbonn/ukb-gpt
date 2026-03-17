@@ -1,0 +1,42 @@
+services:
+  # ============================================================================
+  # PIPELINES (OpenWebUI Pipelines)
+  # ============================================================================
+  pipelines:
+    extends:
+      file: ./hardening.yml
+      service: hardened_common
+    build:
+      context: ..
+      dockerfile: images/openwebui/pipelines.Dockerfile
+      args:
+        OPENWEBUI_PIPELINES_IMAGE: "${OPENWEBUI_PIPELINES_IMAGE:-ghcr.io/open-webui/pipelines:main}"
+    container_name: ukbgpt_pipelines
+    environment:
+      - "PIPELINES_API_KEY=${OPENWEBUI_PIPELINES_API_KEY:-0p3n-w3bu!}"
+      - "ADAPTIVE_RATE_LIMIT_METRICS_URL=${ADAPTIVE_RATE_LIMIT_METRICS_URL:-}"
+      - "GLOBAL_LOG_LEVEL=${GLOBAL_LOG_LEVEL:-INFO}"
+      - "CHECK_URL=http://127.0.0.1:9099/v1"
+      - "PYTHONDONTWRITEBYTECODE=1"
+    volumes:
+      - pipelines-data:/app/pipelines
+    networks:
+      - docker_internal
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/healthcheck.sh"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: on-failure
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /run
+
+  frontend:
+    depends_on:
+      pipelines:
+        condition: service_healthy
+
+volumes:
+  pipelines-data:

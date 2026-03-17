@@ -1,0 +1,8 @@
+services:
+  test_mock_llm_worker_template:
+    extends:
+      file: ../../../model.base.yml
+      service: base_worker_template
+    build:
+      context: ../../../..
+      dockerfile: images/dummy_vllm_worker/Dockerfile

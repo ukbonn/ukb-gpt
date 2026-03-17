@@ -1,0 +1,13 @@
+api_version = "ukbgpt/v1alpha1"
+kind = "model_deployment"
+role = "llm"
+model_family = "model.llm.openai_gpt_oss_120b"
+gpu_architecture = "nvidia_blackwell"
+router = "auto"
+
+[worker_defaults]
+tensor_parallel_size = 1
+expert_parallel_enabled = true
+
+[[workers]]
+gpus = [0]

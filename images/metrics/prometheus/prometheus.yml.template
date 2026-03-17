@@ -1,0 +1,13 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'nginx_ingress'
+    static_configs:
+      - targets: ['exporter:9113']
+
+  - job_name: 'vllm_backend'
+    metrics_path: /metrics
+    static_configs:
+      # Dynamic list injected by generate_prometheus_config.sh
+      - targets: [${PROMETHEUS_WORKER_TARGETS}]

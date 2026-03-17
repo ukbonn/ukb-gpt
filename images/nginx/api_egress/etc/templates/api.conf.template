@@ -1,0 +1,71 @@
+# Route model APIs by path:
+# - /v1/embeddings -> embedding upstream
+# - everything else under /v1/* -> LLM upstream
+map $request_uri $api_egress_target_address {
+    default ${API_EGRESS_LLM_TARGET_ADDRESS};
+    ~^/v1/embeddings ${API_EGRESS_EMBEDDING_TARGET_ADDRESS};
+}
+
+map $request_uri $api_egress_target_sni {
+    default ${API_EGRESS_LLM_SNI};
+    ~^/v1/embeddings ${API_EGRESS_EMBEDDING_SNI};
+}
+
+server {
+    listen ${API_EGRESS_LISTEN_PORT};
+    server_name _;
+
+    # ----------------------------------------------------------------------
+    # REDUNDANT LAYER 3: Strict Identity-Based Whitelist
+    # ----------------------------------------------------------------------
+    # Only the Ingress Proxy is allowed to talk to this egress proxy.
+    allow ${ALLOWED_CLIENT_IP};
+    deny all;
+
+    # Allow large prompts / payloads
+    client_max_body_size ${API_EGRESS_CLIENT_MAX_BODY_SIZE};
+
+    # OpenWebUI exposes API endpoints under /api/*, while local batch clients
+    # speak /v1/* for OpenAI-compatible routing. Normalize at the egress edge.
+    location /v1/ {
+        rewrite ^/v1/(.*)$ /api/$1 break;
+
+        # --- Upstream Target Selection ---
+        proxy_pass $api_egress_target_address;
+
+        # --- Standard Forwarding Headers ---
+        proxy_http_version 1.1;
+        proxy_set_header Host $api_egress_target_sni;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+
+        # --- Streaming: Disable buffering for token-by-token responses ---
+        proxy_buffering off;
+
+        # --- TLS Verification (Mandatory) ---
+        # We force certificate validation against the corporate Root CA.
+        proxy_ssl_verify on;
+        proxy_ssl_trusted_certificate /etc/nginx/certs/root_ca.crt;
+
+        # Ensure SNI is correct for internal HTTPS endpoints
+        proxy_ssl_server_name on;
+        proxy_ssl_name $api_egress_target_sni;
+
+        # --- Timeouts ---
+        proxy_connect_timeout ${API_EGRESS_PROXY_CONNECT_TIMEOUT};
+        proxy_read_timeout ${API_EGRESS_PROXY_READ_TIMEOUT};
+        proxy_send_timeout ${API_EGRESS_PROXY_SEND_TIMEOUT};
+    }
+
+    # Keep this proxy narrowly scoped to API calls only.
+    location / {
+        return 404;
+    }
+
+    # Basic health endpoint
+    location /health {
+        access_log off;
+        return 200 "healthy\n";
+    }
+}

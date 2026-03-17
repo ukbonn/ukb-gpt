@@ -1,0 +1,73 @@
+[model]
+id = "model.llm.openai_gpt_oss_120b"
+role = "llm"
+title = "OpenAI gpt-oss-120b"
+summary = "High-capacity gpt-oss family with runtime-selected deployment topology and optional architecture tuning."
+base_compose_file = "compose/models/llm/openai--gpt-oss-120b/base.yml"
+base_service = "gpt_oss_worker_template"
+order = 10
+wizard_enabled = true
+accelerator = "nvidia"
+supports_expert_parallel = true
+
+[runtime]
+command = [
+  "--port=5000",
+  "--host=0.0.0.0",
+  "--model=openai/gpt-oss-120b",
+  "--max-model-len=${VLLM_LLM_MAX_MODEL_LEN:-131072}",
+  "--trust-remote-code",
+  "--enable-chunked-prefill",
+  "--enable-prefix-caching",
+  "--async-scheduling",
+]
+environment = { TIKTOKEN_ENCODINGS_BASE = "/etc/encodings", VLLM_ENABLE_FUSED_MOE_ACTIVATION_CHUNKING = "1" }
+default_vllm_openai_image = "vllm/vllm-openai:v0.14.0"
+build_args = { VLLM_OPENAI_IMAGE = "${VLLM_OPENAI_IMAGE_LLM:-${VLLM_OPENAI_IMAGE:-vllm/vllm-openai:v0.14.0}}" }
+shm_size = "32gb"
+extra_volumes = [
+  { type = "bind", source = "${GPT_OSS_ENCODINGS_PATH:?Error: GPT_OSS_ENCODINGS_PATH must point to a host directory containing Harmony encodings for gpt-oss profiles}", target = "/etc/encodings", read_only = true },
+]
+
+[architectures.default]
+command_append = ["--gpu-memory-utilization=${VLLM_LLM_GPU_MEMORY_UTILIZATION:-0.95}"]
+
+[architectures.nvidia_ampere]
+environment = { VLLM_ATTENTION_BACKEND = "TRITON_ATTN" }
+
+[architectures.nvidia_hopper]
+environment = { VLLM_ATTENTION_BACKEND = "FLASH_ATTN" }
+command_append = ["--gpu-memory-utilization=${VLLM_LLM_GPU_MEMORY_UTILIZATION:-0.93}"]
+
+[architectures.nvidia_blackwell]
+environment = { VLLM_ATTENTION_BACKEND = "FLASH_ATTN" }
+command_append = ["--gpu-memory-utilization=${VLLM_LLM_GPU_MEMORY_UTILIZATION:-0.92}"]
+
+[[variables]]
+id = "GPT_OSS_ENCODINGS_PATH"
+prompt_order = 10
+prompt = true
+required_when_all = ["always"]
+description = "Host directory containing Harmony encodings required by gpt-oss deployments."
+examples = ["/path/to/pre-downloaded/harmony/encodings"]
+
+[[variables]]
+id = "VLLM_OPENAI_IMAGE_LLM"
+prompt_order = 20
+prompt = true
+description = "Worker image override for this LLM family."
+examples = ["vllm/vllm-openai:v0.14.0"]
+
+[[variables]]
+id = "VLLM_LLM_MAX_MODEL_LEN"
+prompt_order = 30
+prompt = true
+description = "Optional max model length override for this model family."
+examples = ["131072"]
+
+[[variables]]
+id = "VLLM_LLM_GPU_MEMORY_UTILIZATION"
+prompt_order = 40
+prompt = true
+description = "Optional GPU memory utilization fraction override for this model family."
+examples = ["0.95"]

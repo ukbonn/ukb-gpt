@@ -1,0 +1,43 @@
+services:
+  # ============================================================================
+  # COHORT FEASIBILITY APP (Aggregate-only local cohort explorer)
+  # ============================================================================
+  cohort_feasibility:
+    extends:
+      file: ./hardening.yml
+      service: hardened_common
+    build:
+      context: ..
+      dockerfile: apps/cohort_feasibility/Dockerfile
+    container_name: ukbgpt_cohort_feasibility
+    environment:
+      - "COHORT_FEASIBILITY_DATA_ROOT=/data"
+      - "COHORT_FEASIBILITY_PORT=${COHORT_FEASIBILITY_PORT:-8090}"
+      - "PYTHONDONTWRITEBYTECODE=1"
+      - "PYTHONUNBUFFERED=1"
+    volumes:
+      - type: bind
+        source: "${DATASET_STRUCTURING_DATA_ROOT:?Error: DATASET_STRUCTURING_DATA_ROOT must be set when ENABLE_COHORT_FEASIBILITY_APP=true}"
+        target: /data
+        read_only: true
+    networks:
+      - docker_internal
+    depends_on:
+      - ingress
+    restart: on-failure
+    read_only: true
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import sys, urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8090/health', timeout=2).status == 200 else 1)",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 5s
+    tmpfs:
+      - /tmp
+      - /run

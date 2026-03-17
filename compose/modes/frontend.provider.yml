@@ -1,0 +1,106 @@
+services:
+  # ============================================================================
+  # INGRESS (Chatbot Provider Mode)
+  # ============================================================================
+  ingress:
+    ports:
+      # --- PUBLIC ACCESS ---
+      # Bind explicitly to IPv4 by default to avoid unintentionally exposing ingress on IPv6.
+      - "${INGRESS_HTTP_BIND_IP:-0.0.0.0}:${INGRESS_HTTP_PORT:-80}:80"   # HTTP (Redirect -> HTTPS)
+      - "${INGRESS_HTTPS_BIND_IP:-0.0.0.0}:${INGRESS_HTTPS_PORT:-443}:443" # HTTPS (Chat UI / Grafana)
+
+      # --- METRICS TUNNELS (Localhost Only, Plain HTTP) ---
+      # Listeners are generated dynamically by ingress config at startup.
+      # These loopback scrape tunnels do not terminate TLS; use http://127.0.0.1:<port>/metrics.
+      - "${INGRESS_METRICS_BIND_IP:-127.0.0.1}:${INGRESS_METRICS_PORT_START:-5000}-${INGRESS_METRICS_PORT_END:-5007}:5000-5007" # map up to 8 worker /metrics tunnels (HTTP only)
+      - "${INGRESS_EXPORTER_BIND_IP:-127.0.0.1}:${INGRESS_EXPORTER_PORT:-8001}:8001" # ingress exporter /metrics tunnel (HTTP only)
+    environment:
+      # TLS private key secret (in-memory via ingress secret shim)
+      - "CERTIFICATE_KEY=${CERTIFICATE_KEY:?Error: CERTIFICATE_KEY must be set in chatbot provider mode}"
+    volumes:
+      - type: bind
+        source: "${SSL_CERT_PATH:?Error: SSL_CERT_PATH must be set in chatbot provider mode}"
+        target: /etc/nginx/certs/fullchain.pem
+        read_only: true
+      - type: bind
+        source: "${ROOT_CA_PATH:-/dev/null}"
+        target: /usr/local/share/ca-certificates/corporate_root.crt
+        read_only: true
+    cap_add:
+      - NET_BIND_SERVICE # Required for listening to 80/443
+    depends_on:
+      frontend:
+        condition: service_started
+
+  # ============================================================================
+  # FRONTEND (OpenWebUI)
+  # ============================================================================
+  # ROLE: User Interface.
+  frontend:
+    extends:
+      file: ./hardening.yml
+      service: hardened_common
+    build:
+      context: ..
+      dockerfile: images/openwebui/Dockerfile
+      args:
+        OPENWEBUI_IMAGE: "${OPENWEBUI_IMAGE:-ghcr.io/open-webui/open-webui:v0.8.3}"
+        EXTRA_PIP_PACKAGES: "${OPENWEBUI_EXTRA_PIP_PACKAGES:-}"
+    container_name: ukbgpt_frontend
+    user: "${OPENWEBUI_RUNTIME_UID:-999}:${OPENWEBUI_RUNTIME_GID:-999}"
+    environment:
+      - "OPENAI_API_BASE_URLS=${OPENAI_API_BASE_URLS:-http://${PRIMARY_OPENAI_ENDPOINT:-backend_router:5000}/v1}"
+      - "OPENAI_API_KEYS=${OPENAI_API_KEYS:-Empty}"
+      - "ENABLE_API_KEYS=${ENABLE_API_KEYS:-1}" #users are allowed to send request via API by default
+      - "USER_PERMISSIONS_FEATURES_API_KEYS=${USER_PERMISSIONS_FEATURES_API_KEYS:-1}" 
+      - "WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY:-}"
+      - "RAG_EMBEDDING_ENGINE=${RAG_EMBEDDING_ENGINE:-}"
+      - "RAG_OPENAI_API_BASE_URL=${RAG_OPENAI_API_BASE_URL:-}"
+      - "RAG_EMBEDDING_MODEL=${RAG_EMBEDDING_MODEL:-}"
+      - "AUDIO_STT_ENGINE=${AUDIO_STT_ENGINE:-}"
+      - "AUDIO_STT_OPENAI_API_BASE_URL=${AUDIO_STT_OPENAI_API_BASE_URL:-}"
+      - "AUDIO_STT_MODEL=${AUDIO_STT_MODEL:-}"
+
+      # LDAP CONFIGURATION (Points to the 'ldap_egress' airlock)
+      - "ENABLE_LDAP=${ENABLE_LDAP:-}"
+      - "LDAP_APP_PASSWORD=${LDAP_APP_PASSWORD:-}"
+      - "LDAP_SERVER_LABEL=${LDAP_SERVER_LABEL:-LDAP}"
+      - "LDAP_APP_DN=${LDAP_APP_DN:-}"
+      - "LDAP_SEARCH_BASE=${LDAP_SEARCH_BASE:-}"
+      - "LDAP_ATTRIBUTE_FOR_USERNAME=${LDAP_ATTRIBUTE_FOR_USERNAME:-uid}"
+      - "LDAP_ATTRIBUTE_FOR_MAIL=${LDAP_ATTRIBUTE_FOR_MAIL:-mail}"
+      - "LDAP_SEARCH_FILTER=${LDAP_SEARCH_FILTER:-}"
+
+      # hard coded (should not be changed)
+      - "LDAP_SERVER_HOST=ukbgpt_ldap_egress"
+      - "LDAP_SERVER_PORT=389"             # The internal airlock port
+      - "LDAP_USE_TLS=False"               # Unencrypted WITHIN docker_internal, encrypted from proxy to AD
+      - "HOST=0.0.0.0" # Force Bind to 0.0.0.0.
+      - "PORT=8080"
+      - "HF_HOME=/huggingface-cache"
+      - "PYTHONDONTWRITEBYTECODE=1"
+      - "XDG_CACHE_HOME=/app/backend/data/.cache"
+      - "CHAT_HISTORY_RETENTION_DAYS=${CHAT_HISTORY_RETENTION_DAYS:-}"
+      - "CHAT_HISTORY_PURGE_INTERVAL_SECONDS=${CHAT_HISTORY_PURGE_INTERVAL_SECONDS:-}"
+    env_file:
+      - ./../images/openwebui/frontend.env
+    volumes:
+      - type: bind
+        source: "${OPENWEBUI_DATA_DIR:?Error: OPENWEBUI_DATA_DIR must be set}"
+        target: /app/backend/data
+      - type: bind
+        source: "${HF_HOME:-/mnt/.cache/huggingface}"
+        target: /huggingface-cache
+      - type: bind
+        source: "${ROOT_CA_PATH:-/dev/null}"
+        target: /usr/local/share/ca-certificates/corporate_root.crt
+        read_only: true
+    networks:
+      docker_internal:
+        ipv4_address: 172.16.238.10  # Assign a fixed identity IP allowed in egress proxies
+    # OpenWebUI performs dynamic writes (migrations/assets/cache) in multiple
+    # locations; keep frontend rootfs writable for operational stability.
+    read_only: false
+    tmpfs:
+      - /tmp
+      - /run

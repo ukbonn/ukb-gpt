@@ -1,0 +1,9 @@
+services:
+  # Shared hardening baseline reused via `extends` across compose layers.
+  hardened_common:
+    cap_drop:
+      - ALL
+    sysctls:
+      - net.ipv4.ping_group_range=0 2147483647
+    security_opt:
+      - no-new-privileges:true

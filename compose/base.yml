@@ -1,0 +1,87 @@
+name: ukbgpt
+
+services:
+  # ============================================================================
+  # INGRESS (Shared Base)
+  # ============================================================================
+  # ROLE: Single Point of Entry. Terminates SSL in chatbot provider mode,
+  #       serves localhost HTTP in batch client mode.
+  ingress:
+    extends:
+      file: ./hardening.yml
+      service: hardened_common
+    build:
+      context: ..
+      dockerfile: images/nginx/ingress/Dockerfile
+      args:
+        NGINX_INGRESS_IMAGE: "${NGINX_INGRESS_IMAGE:-nginx:1.25-alpine}"
+    container_name: ukbgpt_ingress
+    labels:
+      - "ukbgpt_role=ingress" # used by isolation tests to identify the kill-switch target
+    environment:
+      # CONFIGURATION
+      - "SERVER_NAME=${SERVER_NAME:-localhost}"
+      - "NGINX_ACL_ALLOW_LIST=${NGINX_ACL_ALLOW_LIST:-allow 10.0.0.0/8; allow 172.16.0.0/12; allow 192.168.0.0/16; allow 127.0.0.1;}"
+
+      # FEATURE FLAGS (from start.py)
+      - "ENABLE_INTERNAL_METRICS=${ENABLE_INTERNAL_METRICS:-false}"
+      - "ENABLE_DICTATION_APP=${ENABLE_DICTATION_APP:-false}"
+      - "ENABLE_COHORT_FEASIBILITY_APP=${ENABLE_COHORT_FEASIBILITY_APP:-false}"
+      - "ENABLE_METRICS_FORWARDING=${ENABLE_METRICS_FORWARDING:-false}"
+      - "BACKEND_NODES=${BACKEND_NODES:-}"
+      - "BYPASS_ROUTER=${BYPASS_ROUTER:-true}"
+      - "LLM_BACKEND_NODES=${LLM_BACKEND_NODES:-}"
+      - "LLM_BYPASS_ROUTER=${LLM_BYPASS_ROUTER:-true}"
+      - "EMBEDDING_BACKEND_NODES=${EMBEDDING_BACKEND_NODES:-}"
+      - "EMBEDDING_BYPASS_ROUTER=${EMBEDDING_BYPASS_ROUTER:-true}"
+
+      # BATCH CLIENT MODE (Localhost-only HTTP)
+      - "BATCH_CLIENT_MODE_ON=${BATCH_CLIENT_MODE_ON:-false}"
+      - "BATCH_CLIENT_LISTEN_PORT=${BATCH_CLIENT_LISTEN_PORT:-30000}"
+      - "BATCH_CLIENT_EGRESS_PORT=${BATCH_CLIENT_EGRESS_PORT:-30100}"
+      - "BATCH_CLIENT_DIRECT_PORT_START=${BATCH_CLIENT_DIRECT_PORT_START:-30001}"
+      - "BATCH_CLIENT_DIRECT_PORT_END=${BATCH_CLIENT_DIRECT_PORT_END:-30032}"
+      - "BATCH_CLIENT_MODE_ADDITIONAL_LOCAL_API_ADDRESS=${BATCH_CLIENT_MODE_ADDITIONAL_LOCAL_API_ADDRESS:-}"
+      - "BATCH_CLIENT_MODE_ADDITIONAL_LOCAL_API_ENABLED=${BATCH_CLIENT_MODE_ADDITIONAL_LOCAL_API_ENABLED:-false}"
+      - "BATCH_CLIENT_MODE_ADDITIONAL_LOCAL_EMBEDDING_API_ADDRESS=${BATCH_CLIENT_MODE_ADDITIONAL_LOCAL_EMBEDDING_API_ADDRESS:-}"
+      - "BATCH_CLIENT_MODE_ADDITIONAL_LOCAL_EMBEDDING_API_ENABLED=${BATCH_CLIENT_MODE_ADDITIONAL_LOCAL_EMBEDDING_API_ENABLED:-false}"
+      - "ENABLE_API_EGRESS=${ENABLE_API_EGRESS:-false}"
+    networks:
+      docker_internal:
+        # Static identity so downstream egress proxies can whitelist us
+        ipv4_address: ${INGRESS_INTERNAL_IP:-172.16.238.11}
+      dmz_ingress: # we need this so the ingress can communicate and forward from the local clinic network
+    cap_add:
+      - CHOWN            # Required for Nginx startup
+      - SETGID           # Required for Nginx startup
+      - SETUID           # Required for Nginx startup
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /etc/nginx/conf.d:uid=101,gid=101,mode=755
+      - /var/cache/nginx:uid=101,gid=101,mode=755
+      - /var/log/nginx:uid=101,gid=101,mode=755
+      - /run:uid=101,gid=101,mode=755
+
+networks:
+  docker_internal:
+    # SECURITY:
+    # 'internal: true' prevents Docker from setting a default gateway.
+    driver: bridge
+    internal: true
+    ipam:
+      config:
+        # Reserve low addresses for static identities used by security controls:
+        # frontend (.10), ingress (.11), api_egress (.12), ldap_egress (.13).
+        # Dynamic allocation starts at .128.
+        - subnet: 172.16.238.0/24
+          ip_range: 172.16.238.128/25
+    driver_opts:
+      com.docker.network.bridge.name: br-internal
+  dmz_ingress:
+    # This network allows outbound connections (it has a gateway).
+    driver: bridge
+    internal: false # allowing host port binding
+    driver_opts:
+      # We name the interface so we can target it with iptables (firewalls)
+      com.docker.network.bridge.name: br-dmz-ingress

@@ -1,0 +1,9 @@
+api_version = "ukbgpt/v1alpha1"
+kind = "model_deployment"
+role = "llm"
+model_family = "model.llm.qwen_qwen3_1_7b"
+gpu_architecture = "auto"
+router = "auto"
+
+[[workers]]
+gpus = [0]

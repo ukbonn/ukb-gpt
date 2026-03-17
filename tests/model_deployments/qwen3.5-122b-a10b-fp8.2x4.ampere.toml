@@ -1,0 +1,15 @@
+api_version = "ukbgpt/v1alpha1"
+kind = "model_deployment"
+role = "llm"
+model_family = "model.llm.qwen_qwen3_5_122b_a10b_fp8"
+gpu_architecture = "nvidia_ampere"
+router = "auto"
+
+[worker_defaults]
+tensor_parallel_size = 4
+
+[[workers]]
+gpus = [0, 1, 2, 3]
+
+[[workers]]
+gpus = [4, 5, 6, 7]

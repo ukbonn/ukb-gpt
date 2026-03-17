@@ -1,0 +1,50 @@
+[model]
+id = "model.llm.qwen_qwen3_5_0_8b"
+role = "llm"
+title = "Qwen Qwen3.5-0.8B"
+summary = "Small-footprint Qwen model family with optional context and memory tuning."
+base_compose_file = "compose/models/llm/qwen--qwen3.5-0.8b/base.yml"
+base_service = "qwen3_0_8b_worker_template"
+order = 30
+wizard_enabled = true
+accelerator = "nvidia"
+supports_expert_parallel = false
+
+[runtime]
+command = [
+  "--port=5000",
+  "--host=0.0.0.0",
+  "--model=Qwen/Qwen3.5-0.8B",
+  "--trust-remote-code",
+  "--enforce-eager",
+  "--max-model-len=${VLLM_LLM_MAX_MODEL_LEN:-262144}",
+  "--gpu-memory-utilization=${VLLM_LLM_GPU_MEMORY_UTILIZATION:-0.30}",
+]
+default_vllm_openai_image = "vllm/vllm-openai:v0.17.1-cu130"
+build_args = { VLLM_OPENAI_IMAGE = "${VLLM_OPENAI_IMAGE_LLM:-${VLLM_OPENAI_IMAGE:-vllm/vllm-openai:v0.17.1-cu130}}" }
+shm_size = "16gb"
+
+[architectures.default]
+
+[[variables]]
+id = "VLLM_OPENAI_IMAGE_LLM"
+prompt_order = 10
+prompt = true
+description = "Worker image override for this LLM family."
+examples = ["vllm/vllm-openai:v0.17.1-cu130"]
+
+[[variables]]
+id = "VLLM_LLM_MAX_MODEL_LEN"
+prompt_order = 20
+prompt = true
+required_when_all = []
+description = "Optional max model length override for this model family."
+examples = ["262144"]
+
+[[variables]]
+id = "VLLM_LLM_GPU_MEMORY_UTILIZATION"
+prompt_order = 30
+prompt = true
+required_when_all = []
+description = "Optional GPU memory utilization fraction override for this model family."
+examples = ["0.30"]

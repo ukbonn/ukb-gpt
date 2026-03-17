@@ -1,0 +1,18 @@
+[model]
+id = "model.stt.testing.mock"
+role = "stt"
+title = "Testing Mock STT"
+summary = "Internal test-only mock STT family."
+base_compose_file = "compose/models/testing/mock-stt/base.yml"
+base_service = "test_mock_stt_worker_template"
+order = 900
+wizard_enabled = false
+accelerator = "none"
+supports_expert_parallel = false
+
+[runtime]
+command = ["python", "main.py", "--port=5000", "--model=dummy-stt-model"]
+build_args = { DUMMY_VLLM_WORKER_IMAGE = "${DUMMY_VLLM_WORKER_IMAGE:-python:3.11-slim}" }
+shm_size = "16gb"
+
+[architectures.default]

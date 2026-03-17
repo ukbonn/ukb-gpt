@@ -1,0 +1,64 @@
+[model]
+id = "model.stt.mistralai_voxtral_mini_4b_realtime_2602"
+role = "stt"
+title = "Mistral Voxtral-Mini-4B-Realtime-2602"
+summary = "Dedicated STT backend family for dictation and transcription workflows."
+base_compose_file = "compose/models/stt/mistralai--voxtral-mini-4b-realtime-2602/base.yml"
+base_service = "voxtral_realtime_stt_worker_template"
+order = 10
+wizard_enabled = true
+accelerator = "nvidia"
+supports_expert_parallel = false
+
+[runtime]
+command = [
+  "mistralai/Voxtral-Mini-4B-Realtime-2602",
+  "--port=5000",
+  "--host=0.0.0.0",
+  "--gpu-memory-utilization=${VLLM_STT_GPU_MEMORY_UTILIZATION:-0.70}",
+  "--max-model-len=${VLLM_STT_MAX_MODEL_LEN:-131072}",
+  "--enforce-eager",
+  "--no-enable-prefix-caching",
+  '--compilation_config={"cudagraph_mode": "PIECEWISE"}',
+]
+environment = { VLLM_DISABLE_COMPILE_CACHE = "1", LD_PRELOAD = "${VLLM_STT_LD_PRELOAD:-}" }
+default_vllm_openai_image = "vllm/vllm-openai:nightly"
+build_args = { VLLM_OPENAI_IMAGE = "${VLLM_OPENAI_IMAGE_STT:-${VLLM_OPENAI_IMAGE:-vllm/vllm-openai:nightly}}", EXTRA_PIP_PACKAGES = "${VLLM_STT_EXTRA_PIP_PACKAGES:-soxr librosa soundfile mistral_common>=1.9.0}" }
+shm_size = "16gb"
+
+[architectures.default]
+
+[[variables]]
+id = "VLLM_OPENAI_IMAGE_STT"
+prompt_order = 10
+prompt = true
+description = "Worker image override for this STT family."
+examples = ["vllm/vllm-openai:nightly"]
+
+[[variables]]
+id = "VLLM_STT_EXTRA_PIP_PACKAGES"
+prompt_order = 20
+prompt = false
+description = "Optional additional pip packages for STT worker image builds."
+examples = ["soxr librosa soundfile mistral_common>=1.9.0"]
+
+[[variables]]
+id = "VLLM_STT_LD_PRELOAD"
+prompt_order = 30
+prompt = false
+description = "Optional LD_PRELOAD override for STT workers."
+examples = ["/usr/lib/x86_64-linux-gnu/libjemalloc.so.2"]
+
+[[variables]]
+id = "VLLM_STT_GPU_MEMORY_UTILIZATION"
+prompt_order = 40
+prompt = true
+description = "Optional GPU memory utilization fraction override for STT workers."
+examples = ["0.70"]
+
+[[variables]]
+id = "VLLM_STT_MAX_MODEL_LEN"
+prompt_order = 50
+prompt = true
+description = "Optional max model length override for STT workers."
+examples = ["131072"]

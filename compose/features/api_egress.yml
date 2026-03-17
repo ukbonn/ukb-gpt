@@ -1,0 +1,56 @@
+services:
+  # ============================================================================
+  # API EGRESS (Batch Client Mode)
+  # ============================================================================
+  # ROLE: A tightly scoped HTTPS proxy for pinned internal model APIs
+  #       (LLM and/or embedding targets).
+  # SECURITY:
+  #   - Only accepts traffic from the Ingress container (static IP allow-list).
+  #   - Connected to the dmz_egress network for outbound HTTPS.
+  api_egress:
+    extends:
+      file: ./hardening.yml
+      service: hardened_common
+    build:
+      context: ..
+      dockerfile: images/nginx/api_egress/Dockerfile
+      args:
+        NGINX_API_EGRESS_IMAGE: "${NGINX_API_EGRESS_IMAGE:-nginx:alpine}"
+    container_name: ukbgpt_api_egress
+    environment:
+      # Targets MUST be full HTTPS origins, already rewritten to pinned IPs by utils/stack/startup.py.
+      - "API_EGRESS_LLM_TARGET_ADDRESS=${BATCH_CLIENT_MODE_ADDITIONAL_LOCAL_API_ADDRESS:?Error: BATCH_CLIENT_MODE_ADDITIONAL_LOCAL_API_ADDRESS must be set}"
+      - "API_EGRESS_EMBEDDING_TARGET_ADDRESS=${BATCH_CLIENT_MODE_ADDITIONAL_LOCAL_EMBEDDING_API_ADDRESS:?Error: BATCH_CLIENT_MODE_ADDITIONAL_LOCAL_EMBEDDING_API_ADDRESS must be set}"
+      - "API_EGRESS_LISTEN_PORT=${BATCH_CLIENT_EGRESS_PORT:-30100}"
+      - "API_EGRESS_LLM_SNI=${BATCH_CLIENT_MODE_ADDITIONAL_LOCAL_API_SNI:?Error: BATCH_CLIENT_MODE_ADDITIONAL_LOCAL_API_SNI must be set}"
+      - "API_EGRESS_EMBEDDING_SNI=${BATCH_CLIENT_MODE_ADDITIONAL_LOCAL_EMBEDDING_API_SNI:?Error: BATCH_CLIENT_MODE_ADDITIONAL_LOCAL_EMBEDDING_API_SNI must be set}"
+      - "API_EGRESS_CLIENT_MAX_BODY_SIZE=${API_EGRESS_CLIENT_MAX_BODY_SIZE:-100M}"
+      - "API_EGRESS_PROXY_CONNECT_TIMEOUT=${API_EGRESS_PROXY_CONNECT_TIMEOUT:-10s}"
+      - "API_EGRESS_PROXY_READ_TIMEOUT=${API_EGRESS_PROXY_READ_TIMEOUT:-3600s}"
+      - "API_EGRESS_PROXY_SEND_TIMEOUT=${API_EGRESS_PROXY_SEND_TIMEOUT:-3600s}"
+      
+      # Only allow the ingress container to use this proxy.
+      - "ALLOWED_CLIENT_IP=${INGRESS_INTERNAL_IP:-172.16.238.11}"
+    volumes:
+      # Corporate Root CA for TLS validation of the internal HTTPS endpoint.
+      - type: bind
+        source: "${ROOT_CA_PATH:?Error: ROOT_CA_PATH must be set for API Egress}"
+        target: /etc/nginx/certs/root_ca.crt
+        read_only: true
+    networks:
+      docker_internal:
+        # Reserved static identity on the isolated network.
+        ipv4_address: ${API_EGRESS_INTERNAL_IP:-172.16.238.12}
+      dmz_egress:
+    restart: on-failure
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /etc/nginx/conf.d
+      - /var/cache/nginx
+      - /var/log/nginx
+      - /run

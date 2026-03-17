@@ -1,0 +1,1559 @@
+[schema]
+version = 1
+kind = "ukbgpt.env.schema"
+
+[vars.BATCH_CLIENT_MODE_ON]
+type = "bool"
+default = "false"
+secret = false
+description = "Switch between chatbot provider mode (false) and batch client mode (true)."
+examples = ["false", "true"]
+validators = ["bool"]
+
+[[vars.BATCH_CLIENT_MODE_ON.bindings]]
+overlay = "base.runtime"
+prompt_order = 130
+prompt = false
+
+[[vars.BATCH_CLIENT_MODE_ON.bindings]]
+overlay = "mode.batch_client"
+prompt_order = 10
+prompt = false
+required_when_all = ["mode:batch_client"]
+
+[[vars.BATCH_CLIENT_MODE_ON.bindings]]
+overlay = "mode.chatbot_provider"
+prompt_order = 10
+prompt = false
+required_when_all = ["mode:chatbot_provider"]
+
+[vars.BATCH_CLIENT_LISTEN_PORT]
+type = "int"
+default = "30000"
+secret = false
+description = "Localhost ingress port used in batch client mode."
+examples = ["30000"]
+validators = ["port"]
+
+[[vars.BATCH_CLIENT_LISTEN_PORT.bindings]]
+overlay = "base.runtime"
+prompt_order = 140
+prompt = true
+applicable_when_all = ["mode:batch_client"]
+
+[[vars.BATCH_CLIENT_LISTEN_PORT.bindings]]
+overlay = "mode.batch_client"
+prompt_order = 20
+prompt = true
+required_when_all = ["mode:batch_client"]
+
+[vars.BATCH_CLIENT_DIRECT_PORT_START]
+type = "int"
+default = "30001"
+secret = false
+description = "Start of localhost direct worker port range in batch mode."
+examples = ["30001"]
+validators = ["port"]
+
+[[vars.BATCH_CLIENT_DIRECT_PORT_START.bindings]]
+overlay = "base.runtime"
+prompt_order = 160
+prompt = true
+applicable_when_all = ["mode:batch_client"]
+
+[[vars.BATCH_CLIENT_DIRECT_PORT_START.bindings]]
+overlay = "mode.batch_client"
+prompt_order = 30
+prompt = true
+applicable_when_all = ["mode:batch_client"]
+
+[vars.BATCH_CLIENT_DIRECT_PORT_END]
+type = "int"
+default = "30032"
+secret = false
+description = "End of localhost direct worker port range in batch mode."
+examples = ["30032"]
+validators = ["port"]
+
+[[vars.BATCH_CLIENT_DIRECT_PORT_END.bindings]]
+overlay = "base.runtime"
+prompt_order = 170
+prompt = true
+applicable_when_all = ["mode:batch_client"]
+
+[[vars.BATCH_CLIENT_DIRECT_PORT_END.bindings]]
+overlay = "mode.batch_client"
+prompt_order = 40
+prompt = true
+applicable_when_all = ["mode:batch_client"]
+
+[vars.BATCH_CLIENT_EGRESS_PORT]
+type = "int"
+default = "30100"
+secret = false
+description = "Internal listen port for the api_egress container in batch mode."
+examples = ["30100"]
+validators = ["port"]
+
+[[vars.BATCH_CLIENT_EGRESS_PORT.bindings]]
+overlay = "base.runtime"
+prompt_order = 150
+prompt = true
+applicable_when_all = ["mode:batch_client"]
+
+[[vars.BATCH_CLIENT_EGRESS_PORT.bindings]]
+overlay = "mode.batch_client"
+prompt_order = 50
+prompt = true
+applicable_when_all = ["mode:batch_client"]
+
+[[vars.BATCH_CLIENT_EGRESS_PORT.bindings]]
+overlay = "feature.api_egress"
+prompt_order = 90
+prompt = true
+applicable_when_all = ["feature:api_egress"]
+
+[vars.SERVER_NAME]
+type = "string"
+default = "localhost"
+secret = false
+description = "Hostname used by ingress routes and generated access URLs."
+examples = ["localhost", "gpt.internal.example"]
+validators = ["hostname"]
+
+[[vars.SERVER_NAME.bindings]]
+overlay = "base.runtime"
+prompt_order = 100
+prompt = true
+
+[vars.NGINX_ACL_ALLOW_LIST]
+type = "string"
+default = "allow 10.0.0.0/8; allow 172.16.0.0/12; allow 192.168.0.0/16; allow 127.0.0.1;"
+secret = false
+description = "Ingress IP allow-list rules (Nginx allow directives)."
+examples = ["allow 127.0.0.1; allow 10.0.0.0/8; allow 172.16.0.0/12; allow 192.168.0.0/16;"]
+validators = ["nginx_allow_list"]
+
+[[vars.NGINX_ACL_ALLOW_LIST.bindings]]
+overlay = "base.runtime"
+prompt_order = 110
+prompt = true
+
+[vars.INGRESS_INTERNAL_IP]
+type = "ip"
+default = "172.16.238.11"
+secret = false
+description = "Static docker_internal identity for ingress."
+examples = ["172.16.238.11"]
+validators = ["ipv4"]
+
+[[vars.INGRESS_INTERNAL_IP.bindings]]
+overlay = "base.runtime"
+prompt_order = 120
+prompt = false
+
+[vars.OPENWEBUI_DATA_DIR]
+type = "path"
+default = ""
+secret = false
+description = "Host path mounted to OpenWebUI data storage."
+examples = ["/var/lib/ukbgpt/openwebui-data"]
+validators = ["path"]
+
+[[vars.OPENWEBUI_DATA_DIR.bindings]]
+overlay = "mode.chatbot_provider"
+prompt_order = 50
+prompt = true
+required_when_all = ["mode:chatbot_provider"]
+
+[vars.OPENWEBUI_RUNTIME_UID]
+type = "int"
+default = ""
+secret = false
+description = "Runtime UID for OpenWebUI container bind-path ownership alignment."
+examples = ["1000"]
+validators = ["positive_int"]
+
+[[vars.OPENWEBUI_RUNTIME_UID.bindings]]
+overlay = "mode.chatbot_provider"
+prompt_order = 60
+prompt = false
+applicable_when_all = ["mode:chatbot_provider"]
+
+[vars.OPENWEBUI_RUNTIME_GID]
+type = "int"
+default = ""
+secret = false
+description = "Runtime GID for OpenWebUI container bind-path ownership alignment."
+examples = ["1000"]
+validators = ["positive_int"]
+
+[[vars.OPENWEBUI_RUNTIME_GID.bindings]]
+overlay = "mode.chatbot_provider"
+prompt_order = 70
+prompt = false
+applicable_when_all = ["mode:chatbot_provider"]
+
+[vars.OPENWEBUI_PIPELINES_API_KEY]
+type = "string"
+default = ""
+secret = true
+description = "Optional internal API key override for the bundled OpenWebUI Pipelines service."
+examples = ["$(openssl rand -hex 16)"]
+
+[[vars.OPENWEBUI_PIPELINES_API_KEY.bindings]]
+overlay = "feature.rate_limiting"
+prompt_order = 75
+prompt = false
+applicable_when_all = ["feature:rate_limiting"]
+
+[vars.ADAPTIVE_RATE_LIMIT_METRICS_URL]
+type = "string"
+default = ""
+secret = false
+description = "Optional default metrics endpoint used by the adaptive rate-limit pipeline."
+examples = ["http://worker_0:5000/metrics"]
+
+[[vars.ADAPTIVE_RATE_LIMIT_METRICS_URL.bindings]]
+overlay = "feature.rate_limiting"
+prompt_order = 76
+prompt = false
+applicable_when_all = ["feature:rate_limiting"]
+
+[vars.CERTIFICATE_KEY]
+type = "string"
+default = ""
+secret = true
+description = "TLS private key PEM content for ingress (chatbot provider mode)."
+examples = ["$(cat /path/to/server.key)"]
+validators = ["pem_private_key"]
+
+[[vars.CERTIFICATE_KEY.bindings]]
+overlay = "mode.chatbot_provider"
+prompt_order = 20
+prompt = false
+required_when_all = ["mode:chatbot_provider"]
+
+[vars.SSL_CERT_PATH]
+type = "path"
+default = ""
+secret = false
+description = "Absolute host path to PEM certificate chain (fullchain)."
+examples = ["/path/to/fullchain.pem"]
+validators = ["file", "pem_certificate"]
+
+[[vars.SSL_CERT_PATH.bindings]]
+overlay = "mode.chatbot_provider"
+prompt_order = 30
+prompt = true
+required_when_all = ["mode:chatbot_provider"]
+description = "Absolute host path to the ingress TLS fullchain PEM (leaf + intermediates). Testing only: run `python3 utils/scripts/create_localhost_pki.py` and use `~/.ukbgpt-localhost-pki/fullchain.pem`."
+examples = ["/home/your-user/.ukbgpt-localhost-pki/fullchain.pem"]
+
+[vars.WEBUI_SECRET_KEY]
+type = "string"
+default = ""
+secret = true
+description = "OpenWebUI application secret key."
+examples = ["$(openssl rand -hex 32)"]
+validators = ["non_empty"]
+
+[[vars.WEBUI_SECRET_KEY.bindings]]
+overlay = "mode.chatbot_provider"
+prompt_order = 40
+prompt = false
+required_when_all = ["mode:chatbot_provider"]
+
+[vars.ENABLE_API_KEYS]
+type = "bool"
+default = "1"
+secret = false
+description = "Allow in general OpenWebUI API key usage."
+examples = ["1", "0"]
+validators = ["bool"]
+
+[[vars.ENABLE_API_KEYS.bindings]]
+overlay = "mode.chatbot_provider"
+prompt_order = 80
+prompt = true
+applicable_when_all = ["mode:chatbot_provider"]
+
+[vars.USER_PERMISSIONS_FEATURES_API_KEYS]
+type = "bool"
+default = "1"
+secret = false
+description = "Allow also default users OpenWebUI API key usage."
+examples = ["1", "0"]
+validators = ["bool"]
+
+[[vars.USER_PERMISSIONS_FEATURES_API_KEYS.bindings]]
+overlay = "mode.chatbot_provider"
+prompt_order = 90
+prompt = true
+applicable_when_all = ["mode:chatbot_provider"]
+
+[vars.ROOT_CA_PATH]
+type = "path"
+default = ""
+secret = false
+description = "Host path to corporate Root CA PEM used for outbound TLS verification."
+examples = ["/path/to/corporate_root_ca.pem"]
+validators = ["file"]
+
+[[vars.ROOT_CA_PATH.bindings]]
+overlay = "base.runtime"
+prompt_order = 260
+prompt = true
+applicable_when_any = ["feature:ldap", "feature:api_egress"]
+required_when_any = ["feature:ldap", "feature:api_egress"]
+description = "Corporate Root CA PEM path used to verify TLS to pinned LDAP/API egress upstreams. Required when LDAP or API egress is enabled."
+examples = ["/etc/ssl/certs/corp-root-ca.pem"]
+
+[[vars.ROOT_CA_PATH.bindings]]
+overlay = "feature.api_egress"
+prompt_order = 20
+prompt = true
+required_when_all = ["feature:api_egress"]
+description = "Root CA PEM used by api_egress to verify TLS for pinned additional API upstreams. Testing only: run `python3 utils/scripts/create_localhost_pki.py` and use `~/.ukbgpt-localhost-pki/root_ca.crt`."
+examples = ["/home/your-user/.ukbgpt-localhost-pki/root_ca.crt"]
+
+[[vars.ROOT_CA_PATH.bindings]]
+overlay = "feature.ldap"
+prompt_order = 40
+prompt = true
+required_when_all = ["feature:ldap"]
+description = "Root CA PEM used by the LDAP egress proxy to validate upstream LDAPS certificates. Testing only: run `python3 utils/scripts/create_localhost_pki.py` and use `~/.ukbgpt-localhost-pki/root_ca.crt`."
+examples = ["/home/your-user/.ukbgpt-localhost-pki/root_ca.crt"]
+
+[vars.MODEL_DEPLOYMENT_CONFIG]
+type = "string"
+default = ""
+secret = false
+description = "Primary LLM model deployment config path (repo-relative or absolute)."
+examples = ["examples/model_deployments/gpt-oss-120b.1x8.toml"]
+validators = []
+
+[vars.GPT_OSS_ENCODINGS_PATH]
+type = "path"
+default = ""
+secret = false
+description = "Host directory containing pre-downloaded Harmony encodings for gpt-oss profiles."
+examples = ["/path/to/pre-downloaded/harmony/encodings"]
+validators = ["directory"]
+
+[vars.HF_HOME]
+type = "path"
+default = "~/.cache/huggingface"
+secret = false
+description = "Host Hugging Face cache directory containing pre-downloaded model artifacts. The stack runs offline; download models into this directory before startup, for example with `hf download <model_id> --cache-dir \"$HF_HOME\"`."
+examples = ["~/.cache/huggingface", "/mnt/.cache/huggingface"]
+validators = ["path"]
+
+[[vars.HF_HOME.bindings]]
+overlay = "base.runtime"
+prompt_order = 265
+prompt = true
+
+[vars.VLLM_OPENAI_IMAGE]
+type = "string"
+default = ""
+secret = false
+description = "Global fallback worker image for LLM, embedding, and STT backends."
+examples = ["vllm/vllm-openai:v0.14.0"]
+validators = []
+
+[vars.VLLM_OPENAI_IMAGE_LLM]
+type = "string"
+default = ""
+secret = false
+description = "Worker image override for primary LLM backend."
+examples = ["vllm/vllm-openai:v0.14.0"]
+validators = []
+
+[vars.VLLM_OPENAI_IMAGE_EMBEDDING]
+type = "string"
+default = ""
+secret = false
+description = "Worker image override for embedding backend."
+examples = ["vllm/vllm-openai:v0.14.0"]
+validators = []
+
+[vars.VLLM_OPENAI_IMAGE_STT]
+type = "string"
+default = ""
+secret = false
+description = "Worker image override for STT backend."
+examples = ["vllm/vllm-openai:nightly"]
+validators = []
+
+[vars.VLLM_LLM_MAX_MODEL_LEN]
+type = "string"
+default = ""
+secret = false
+description = "Optional override for LLM max model length."
+examples = ["262144"]
+validators = []
+
+[vars.VLLM_LLM_GPU_MEMORY_UTILIZATION]
+type = "string"
+default = ""
+secret = false
+description = "Optional override for LLM GPU memory utilization fraction in selected LLM profiles."
+examples = ["0.30"]
+validators = []
+
+[vars.VLLM_EMBEDDING_GPU_MEMORY_UTILIZATION]
+type = "string"
+default = ""
+secret = false
+description = "Optional override for embedding GPU memory utilization fraction."
+examples = ["0.90"]
+validators = []
+
+[vars.VLLM_EMBEDDING_MAX_MODEL_LEN]
+type = "string"
+default = ""
+secret = false
+description = "Optional override for embedding max model length."
+examples = ["32000"]
+validators = []
+
+[vars.VLLM_STT_EXTRA_PIP_PACKAGES]
+type = "string"
+default = ""
+secret = false
+description = "Optional extra pip packages baked into STT worker image build."
+examples = ["soxr librosa soundfile mistral_common>=1.9.0"]
+validators = []
+
+[vars.VLLM_STT_LD_PRELOAD]
+type = "string"
+default = ""
+secret = false
+description = "Optional LD_PRELOAD override for STT workers."
+examples = ["/usr/lib/x86_64-linux-gnu/libjemalloc.so.2"]
+validators = []
+
+[vars.VLLM_STT_GPU_MEMORY_UTILIZATION]
+type = "string"
+default = ""
+secret = false
+description = "Optional override for STT GPU memory utilization fraction."
+examples = ["0.70"]
+validators = []
+
+[vars.VLLM_STT_MAX_MODEL_LEN]
+type = "string"
+default = ""
+secret = false
+description = "Optional override for STT max model length."
+examples = ["131072"]
+validators = []
+
+[vars.NGINX_BACKEND_ROUTER_IMAGE]
+type = "string"
+default = "nginx:1.25-alpine"
+secret = false
+description = "Image pin for backend router service used in multi-worker topologies."
+examples = ["nginx:1.25-alpine"]
+validators = []
+
+[vars.BACKEND_ROUTER_INTERNAL_IP]
+type = "ip"
+default = "172.16.238.20"
+secret = false
+description = "Static docker_internal identity for backend_router."
+examples = ["172.16.238.20"]
+validators = ["ipv4"]
+
+[vars.ENABLE_INTERNAL_METRICS]
+type = "bool"
+default = "false"
+secret = false
+description = "Enable exporter + Prometheus + Grafana overlays."
+examples = ["true", "false"]
+validators = ["bool"]
+
+[[vars.ENABLE_INTERNAL_METRICS.bindings]]
+overlay = "base.runtime"
+prompt_order = 180
+prompt = false
+
+[[vars.ENABLE_INTERNAL_METRICS.bindings]]
+overlay = "feature.metrics"
+prompt_order = 10
+prompt = false
+required_when_all = ["feature:metrics"]
+
+[vars.ENABLE_METRICS_FORWARDING]
+type = "bool"
+default = "false"
+secret = false
+description = "Expose localhost scrape tunnels for ingress/worker metrics."
+examples = ["true", "false"]
+validators = ["bool"]
+
+[[vars.ENABLE_METRICS_FORWARDING.bindings]]
+overlay = "base.runtime"
+prompt_order = 250
+prompt = true
+
+[[vars.ENABLE_METRICS_FORWARDING.bindings]]
+overlay = "feature.metrics"
+prompt_order = 20
+prompt = true
+applicable_when_all = ["feature:metrics"]
+
+[vars.ENABLE_LDAP]
+type = "bool"
+default = "false"
+secret = false
+description = "Enable LDAP identity airlock in chatbot provider mode."
+examples = ["true", "false"]
+validators = ["bool"]
+
+[[vars.ENABLE_LDAP.bindings]]
+overlay = "base.runtime"
+prompt_order = 190
+prompt = false
+
+[[vars.ENABLE_LDAP.bindings]]
+overlay = "feature.ldap"
+prompt_order = 10
+prompt = false
+required_when_all = ["feature:ldap"]
+
+[vars.LDAP_TARGET_IP]
+type = "ip"
+default = ""
+secret = false
+description = "Pinned RFC1918 private IPv4 of upstream LDAP/LDAPS server."
+examples = ["10.20.30.40"]
+validators = ["rfc1918_ipv4"]
+
+[[vars.LDAP_TARGET_IP.bindings]]
+overlay = "feature.ldap"
+prompt_order = 20
+prompt = true
+required_when_all = ["feature:ldap"]
+description = "Pinned private IPv4 address of the LDAP/LDAPS directory server reachable via the DMZ airlock."
+examples = ["10.20.30.40"]
+
+[vars.LDAP_TARGET_SNI]
+type = "string"
+default = ""
+secret = false
+description = "TLS SNI hostname expected by the LDAP server certificate."
+examples = ["dc01.corp.local"]
+validators = ["hostname"]
+
+[[vars.LDAP_TARGET_SNI.bindings]]
+overlay = "feature.ldap"
+prompt_order = 30
+prompt = true
+required_when_all = ["feature:ldap"]
+description = "SNI hostname expected by the LDAP server certificate during TLS verification."
+examples = ["dc01.corp.local"]
+
+[vars.LDAP_APP_PASSWORD]
+type = "string"
+default = ""
+secret = true
+description = "LDAP bind account password used by OpenWebUI."
+examples = ["<service-account-password>"]
+validators = ["non_empty"]
+
+[[vars.LDAP_APP_PASSWORD.bindings]]
+overlay = "feature.ldap"
+prompt_order = 50
+prompt = false
+required_when_all = ["feature:ldap"]
+
+[vars.LDAP_SERVER_LABEL]
+type = "string"
+default = "LDAP"
+secret = false
+description = "Label shown on the frontend LDAP login option."
+examples = ["Corporate AD"]
+validators = ["non_empty"]
+
+[[vars.LDAP_SERVER_LABEL.bindings]]
+overlay = "feature.ldap"
+prompt_order = 60
+prompt = true
+applicable_when_all = ["feature:ldap"]
+description = "Human-readable label shown on the OpenWebUI login screen for LDAP sign-in."
+examples = ["Corporate LDAP"]
+
+[vars.LDAP_APP_DN]
+type = "string"
+default = ""
+secret = false
+description = "LDAP bind DN for the service account."
+examples = ["cn=admin,dc=example,dc=org"]
+validators = []
+
+[[vars.LDAP_APP_DN.bindings]]
+overlay = "feature.ldap"
+prompt_order = 70
+prompt = true
+applicable_when_all = ["feature:ldap"]
+
+[vars.LDAP_SEARCH_BASE]
+type = "string"
+default = ""
+secret = false
+description = "LDAP search base used for user lookup."
+examples = ["OU=Users,DC=corp,DC=local"]
+validators = []
+
+[[vars.LDAP_SEARCH_BASE.bindings]]
+overlay = "feature.ldap"
+prompt_order = 80
+prompt = true
+applicable_when_all = ["feature:ldap"]
+
+[vars.LDAP_ATTRIBUTE_FOR_USERNAME]
+type = "string"
+default = "uid"
+secret = false
+description = "LDAP attribute mapped to username."
+examples = ["uid", "sAMAccountName"]
+validators = []
+
+[[vars.LDAP_ATTRIBUTE_FOR_USERNAME.bindings]]
+overlay = "feature.ldap"
+prompt_order = 90
+prompt = true
+applicable_when_all = ["feature:ldap"]
+
+[vars.LDAP_ATTRIBUTE_FOR_MAIL]
+type = "string"
+default = "mail"
+secret = false
+description = "LDAP attribute mapped to email."
+examples = ["mail"]
+validators = []
+
+[[vars.LDAP_ATTRIBUTE_FOR_MAIL.bindings]]
+overlay = "feature.ldap"
+prompt_order = 100
+prompt = true
+applicable_when_all = ["feature:ldap"]
+
+[vars.LDAP_SEARCH_FILTER]
+type = "string"
+default = ""
+secret = false
+description = "Additional LDAP filter expression for user search."
+examples = ["(objectClass=user)"]
+validators = []
+
+[[vars.LDAP_SEARCH_FILTER.bindings]]
+overlay = "feature.ldap"
+prompt_order = 110
+prompt = true
+applicable_when_all = ["feature:ldap"]
+
+[vars.LDAP_PROXY_CONNECT_TIMEOUT]
+type = "string"
+default = "5s"
+secret = false
+description = "LDAP airlock connect timeout."
+examples = ["5s"]
+validators = ["duration"]
+
+[[vars.LDAP_PROXY_CONNECT_TIMEOUT.bindings]]
+overlay = "feature.ldap"
+prompt_order = 120
+prompt = true
+applicable_when_all = ["feature:ldap"]
+
+[vars.LDAP_PROXY_TIMEOUT]
+type = "string"
+default = "20s"
+secret = false
+description = "LDAP airlock proxy timeout."
+examples = ["20s"]
+validators = ["duration"]
+
+[[vars.LDAP_PROXY_TIMEOUT.bindings]]
+overlay = "feature.ldap"
+prompt_order = 130
+prompt = true
+applicable_when_all = ["feature:ldap"]
+
+[vars.ENABLE_CHAT_PURGER]
+type = "bool"
+default = "false"
+secret = false
+description = "Enable chat retention purger sidecar in chatbot provider mode."
+examples = ["true", "false"]
+validators = ["bool"]
+
+[[vars.ENABLE_CHAT_PURGER.bindings]]
+overlay = "base.runtime"
+prompt_order = 200
+prompt = false
+
+[[vars.ENABLE_CHAT_PURGER.bindings]]
+overlay = "feature.chat_purger"
+prompt_order = 10
+prompt = false
+required_when_all = ["feature:chat_purger"]
+
+[vars.ENABLE_RATE_LIMITING]
+type = "bool"
+default = "false"
+secret = false
+description = "Enable the OpenWebUI Pipelines sidecar and adaptive/static rate limiting in chatbot provider mode."
+examples = ["true", "false"]
+validators = ["bool"]
+
+[[vars.ENABLE_RATE_LIMITING.bindings]]
+overlay = "base.runtime"
+prompt_order = 205
+prompt = false
+
+[[vars.ENABLE_RATE_LIMITING.bindings]]
+overlay = "feature.rate_limiting"
+prompt_order = 10
+prompt = false
+required_when_all = ["feature:rate_limiting"]
+
+[vars.CHAT_HISTORY_RETENTION_DAYS]
+type = "int"
+default = "180"
+secret = false
+description = "Retention horizon in days for local OpenWebUI chat records."
+examples = ["180"]
+validators = ["positive_int"]
+
+[[vars.CHAT_HISTORY_RETENTION_DAYS.bindings]]
+overlay = "feature.chat_purger"
+prompt_order = 20
+prompt = true
+applicable_when_all = ["feature:chat_purger"]
+required_when_all = ["feature:chat_purger"]
+
+[vars.CHAT_HISTORY_PURGE_INTERVAL_SECONDS]
+type = "int"
+default = "86400"
+secret = false
+description = "Interval between chat purge executions in seconds."
+examples = ["86400"]
+validators = ["positive_int"]
+
+[[vars.CHAT_HISTORY_PURGE_INTERVAL_SECONDS.bindings]]
+overlay = "feature.chat_purger"
+prompt_order = 30
+prompt = true
+applicable_when_all = ["feature:chat_purger"]
+required_when_all = ["feature:chat_purger"]
+
+[vars.ENABLE_API_EGRESS]
+type = "bool"
+default = "false"
+secret = false
+description = "Enable pinned batch API egress feature."
+examples = ["true", "false"]
+validators = ["bool"]
+
+[[vars.ENABLE_API_EGRESS.bindings]]
+overlay = "base.runtime"
+prompt_order = 210
+prompt = false
+
+[[vars.ENABLE_API_EGRESS.bindings]]
+overlay = "feature.api_egress"
+prompt_order = 10
+prompt = false
+required_when_all = ["feature:api_egress"]
+
+[vars.BATCH_CLIENT_MODE_ADDITIONAL_LOCAL_API_ADDRESS]
+type = "url"
+default = ""
+secret = false
+description = "Origin-only HTTPS address for additional upstream LLM API."
+examples = ["https://gpt.ukb.intern"]
+validators = ["https_origin"]
+
+[[vars.BATCH_CLIENT_MODE_ADDITIONAL_LOCAL_API_ADDRESS.bindings]]
+overlay = "feature.api_egress"
+prompt_order = 30
+prompt = true
+applicable_when_all = ["feature:api_egress"]
+description = "HTTPS origin of the additional LLM API endpoint reachable through api_egress."
+examples = ["https://gpt.ukb.intern"]
+
+[vars.BATCH_CLIENT_MODE_ADDITIONAL_LOCAL_API_IP]
+type = "ip"
+default = ""
+secret = false
+description = "Pinned RFC1918 private IPv4 for additional upstream LLM API."
+examples = ["10.20.24.206"]
+validators = ["rfc1918_ipv4"]
+
+[[vars.BATCH_CLIENT_MODE_ADDITIONAL_LOCAL_API_IP.bindings]]
+overlay = "feature.api_egress"
+prompt_order = 40
+prompt = true
+applicable_when_all = ["feature:api_egress"]
+description = "Pinned private IPv4 for the additional LLM API origin."
+examples = ["10.20.24.206"]
+
+[vars.BATCH_CLIENT_MODE_ADDITIONAL_LOCAL_API_SNI]
+type = "string"
+default = ""
+secret = false
+description = "Optional explicit TLS SNI hostname for additional upstream LLM API."
+examples = ["gpt.corp.internal"]
+validators = ["hostname"]
+
+[[vars.BATCH_CLIENT_MODE_ADDITIONAL_LOCAL_API_SNI.bindings]]
+overlay = "feature.api_egress"
+prompt_order = 50
+prompt = true
+applicable_when_all = ["feature:api_egress"]
+
+[vars.BATCH_CLIENT_MODE_ADDITIONAL_LOCAL_EMBEDDING_API_ADDRESS]
+type = "url"
+default = ""
+secret = false
+description = "Origin-only HTTPS address for additional upstream embedding API."
+examples = ["https://embeddings.research.ukb.intern"]
+validators = ["https_origin"]
+
+[[vars.BATCH_CLIENT_MODE_ADDITIONAL_LOCAL_EMBEDDING_API_ADDRESS.bindings]]
+overlay = "feature.api_egress"
+prompt_order = 60
+prompt = true
+applicable_when_all = ["feature:api_egress"]
+description = "HTTPS origin of the additional embedding API endpoint reachable through api_egress."
+examples = ["https://embeddings.ukb.intern"]
+
+[vars.BATCH_CLIENT_MODE_ADDITIONAL_LOCAL_EMBEDDING_API_IP]
+type = "ip"
+default = ""
+secret = false
+description = "Pinned RFC1918 private IPv4 for additional upstream embedding API."
+examples = ["10.20.24.207"]
+validators = ["rfc1918_ipv4"]
+
+[[vars.BATCH_CLIENT_MODE_ADDITIONAL_LOCAL_EMBEDDING_API_IP.bindings]]
+overlay = "feature.api_egress"
+prompt_order = 70
+prompt = true
+applicable_when_all = ["feature:api_egress"]
+description = "Pinned private IPv4 for the additional embedding API origin."
+examples = ["10.20.24.207"]
+
+[vars.BATCH_CLIENT_MODE_ADDITIONAL_LOCAL_EMBEDDING_API_SNI]
+type = "string"
+default = ""
+secret = false
+description = "Optional explicit TLS SNI hostname for additional upstream embedding API."
+examples = ["embeddings.corp.internal"]
+validators = ["hostname"]
+
+[[vars.BATCH_CLIENT_MODE_ADDITIONAL_LOCAL_EMBEDDING_API_SNI.bindings]]
+overlay = "feature.api_egress"
+prompt_order = 80
+prompt = true
+applicable_when_all = ["feature:api_egress"]
+
+[vars.API_EGRESS_INTERNAL_IP]
+type = "ip"
+default = "172.16.238.12"
+secret = false
+description = "Static docker_internal identity for api_egress."
+examples = ["172.16.238.12"]
+validators = ["ipv4"]
+
+[[vars.API_EGRESS_INTERNAL_IP.bindings]]
+overlay = "feature.api_egress"
+prompt_order = 100
+prompt = true
+applicable_when_all = ["feature:api_egress"]
+
+[vars.API_EGRESS_CLIENT_MAX_BODY_SIZE]
+type = "string"
+default = "100M"
+secret = false
+description = "Maximum request body size accepted by api_egress proxy."
+examples = ["100M"]
+validators = []
+
+[[vars.API_EGRESS_CLIENT_MAX_BODY_SIZE.bindings]]
+overlay = "feature.api_egress"
+prompt_order = 110
+prompt = true
+applicable_when_all = ["feature:api_egress"]
+
+[vars.API_EGRESS_PROXY_CONNECT_TIMEOUT]
+type = "string"
+default = "10s"
+secret = false
+description = "API egress connect timeout."
+examples = ["10s"]
+validators = ["duration"]
+
+[[vars.API_EGRESS_PROXY_CONNECT_TIMEOUT.bindings]]
+overlay = "feature.api_egress"
+prompt_order = 120
+prompt = true
+applicable_when_all = ["feature:api_egress"]
+
+[vars.API_EGRESS_PROXY_READ_TIMEOUT]
+type = "string"
+default = "3600s"
+secret = false
+description = "API egress upstream read timeout."
+examples = ["3600s"]
+validators = ["duration"]
+
+[[vars.API_EGRESS_PROXY_READ_TIMEOUT.bindings]]
+overlay = "feature.api_egress"
+prompt_order = 130
+prompt = true
+applicable_when_all = ["feature:api_egress"]
+
+[vars.API_EGRESS_PROXY_SEND_TIMEOUT]
+type = "string"
+default = "3600s"
+secret = false
+description = "API egress upstream send timeout."
+examples = ["3600s"]
+validators = ["duration"]
+
+[[vars.API_EGRESS_PROXY_SEND_TIMEOUT.bindings]]
+overlay = "feature.api_egress"
+prompt_order = 140
+prompt = true
+applicable_when_all = ["feature:api_egress"]
+
+[vars.EMBEDDING_MODEL_DEPLOYMENT_CONFIG]
+type = "string"
+default = ""
+secret = false
+description = "Model deployment config path for embedding workers (repo-relative or absolute)."
+examples = ["examples/model_deployments/gte-qwen2.single-gpu.toml"]
+validators = []
+
+[[vars.EMBEDDING_MODEL_DEPLOYMENT_CONFIG.bindings]]
+overlay = "feature.embedding_backend"
+prompt_order = 10
+prompt = true
+required_when_all = ["feature:embedding_backend"]
+description = "Deployment config for embedding workers (repo-relative or absolute path)."
+examples = ["examples/model_deployments/gte-qwen2.single-gpu.toml"]
+
+[vars.STT_MODEL_DEPLOYMENT_CONFIG]
+type = "string"
+default = ""
+secret = false
+description = "Model deployment config path for STT workers (repo-relative or absolute)."
+examples = ["examples/model_deployments/voxtral-mini-4b.single-gpu.toml"]
+validators = []
+
+[[vars.STT_MODEL_DEPLOYMENT_CONFIG.bindings]]
+overlay = "feature.stt_backend"
+prompt_order = 10
+prompt = true
+required_when_all = ["feature:stt_backend"]
+description = "Deployment config for STT workers (repo-relative or absolute path)."
+examples = ["examples/model_deployments/voxtral-mini-4b.single-gpu.toml"]
+
+[vars.ENABLE_DICTATION_APP]
+type = "bool"
+default = "false"
+secret = false
+description = "Enable dictation app overlay (chatbot provider mode only)."
+examples = ["true", "false"]
+validators = ["bool"]
+
+[[vars.ENABLE_DICTATION_APP.bindings]]
+overlay = "base.runtime"
+prompt_order = 220
+prompt = false
+
+[[vars.ENABLE_DICTATION_APP.bindings]]
+overlay = "app.dictation"
+prompt_order = 10
+prompt = false
+required_when_all = ["app:dictation"]
+
+[vars.STT_MODEL_ID]
+type = "string"
+default = "mistralai/Voxtral-Mini-4B-Realtime-2602"
+secret = false
+description = "Model id presented to dictation/STT clients."
+examples = ["mistralai/Voxtral-Mini-4B-Realtime-2602"]
+validators = []
+
+[[vars.STT_MODEL_ID.bindings]]
+overlay = "app.dictation"
+prompt_order = 20
+prompt = true
+applicable_when_all = ["app:dictation"]
+
+[vars.ENABLE_DATASET_STRUCTURING_APP]
+type = "bool"
+default = "false"
+secret = false
+description = "Enable dataset structuring utility app (batch client mode only)."
+examples = ["true", "false"]
+validators = ["bool"]
+
+[[vars.ENABLE_DATASET_STRUCTURING_APP.bindings]]
+overlay = "base.runtime"
+prompt_order = 230
+prompt = false
+
+[[vars.ENABLE_DATASET_STRUCTURING_APP.bindings]]
+overlay = "app.dataset_structuring"
+prompt_order = 10
+prompt = false
+required_when_all = ["app:dataset_structuring"]
+
+[vars.DATASET_STRUCTURING_DATA_ROOT]
+type = "path"
+default = ""
+secret = false
+description = "Host dataset root mounted into dataset structuring and cohort feasibility apps."
+examples = ["/absolute/path/to/datasets_root"]
+validators = ["directory"]
+
+[[vars.DATASET_STRUCTURING_DATA_ROOT.bindings]]
+overlay = "app.cohort_feasibility"
+prompt_order = 20
+prompt = true
+required_when_all = ["app:cohort_feasibility"]
+
+[[vars.DATASET_STRUCTURING_DATA_ROOT.bindings]]
+overlay = "app.dataset_structuring"
+prompt_order = 20
+prompt = true
+required_when_all = ["app:dataset_structuring"]
+
+[vars.DATASET_STRUCTURING_CPUSET]
+type = "string"
+default = ""
+secret = false
+description = "Optional CPU affinity override for dataset structuring app."
+examples = ["2-15"]
+validators = ["cpuset"]
+
+[[vars.DATASET_STRUCTURING_CPUSET.bindings]]
+overlay = "app.dataset_structuring"
+prompt_order = 50
+prompt = true
+applicable_when_all = ["app:dataset_structuring"]
+
+[vars.DATASET_STRUCTURING_MEM_LIMIT]
+type = "string"
+default = ""
+secret = false
+description = "Optional memory limit override for dataset structuring app."
+examples = ["48g"]
+validators = ["memory_limit"]
+
+[[vars.DATASET_STRUCTURING_MEM_LIMIT.bindings]]
+overlay = "app.dataset_structuring"
+prompt_order = 60
+prompt = true
+applicable_when_all = ["app:dataset_structuring"]
+
+[vars.DATASET_STRUCTURING_NOFILE_SOFT]
+type = "int"
+default = "8192"
+secret = false
+description = "Soft nofile ulimit for dataset structuring app."
+examples = ["8192"]
+validators = ["positive_int"]
+
+[[vars.DATASET_STRUCTURING_NOFILE_SOFT.bindings]]
+overlay = "app.dataset_structuring"
+prompt_order = 70
+prompt = true
+applicable_when_all = ["app:dataset_structuring"]
+
+[vars.DATASET_STRUCTURING_NOFILE_HARD]
+type = "int"
+default = "8192"
+secret = false
+description = "Hard nofile ulimit for dataset structuring app."
+examples = ["8192"]
+validators = ["positive_int"]
+
+[[vars.DATASET_STRUCTURING_NOFILE_HARD.bindings]]
+overlay = "app.dataset_structuring"
+prompt_order = 80
+prompt = true
+applicable_when_all = ["app:dataset_structuring"]
+
+[vars.API_KEY]
+type = "string"
+default = ""
+secret = true
+description = "API key used by dataset structuring app for LLM requests."
+examples = ["<your_llm_api_key>"]
+validators = ["non_empty"]
+
+[[vars.API_KEY.bindings]]
+overlay = "app.dataset_structuring"
+prompt_order = 30
+prompt = false
+required_when_all = ["app:dataset_structuring"]
+
+[vars.EMBEDDING_API_KEY]
+type = "string"
+default = ""
+secret = true
+description = "API key used by dataset structuring app for embedding requests."
+examples = ["<your_embedding_api_key>"]
+validators = ["non_empty"]
+
+[[vars.EMBEDDING_API_KEY.bindings]]
+overlay = "app.dataset_structuring"
+prompt_order = 40
+prompt = false
+required_when_all = ["app:dataset_structuring"]
+
+[vars.ENABLE_COHORT_FEASIBILITY_APP]
+type = "bool"
+default = "false"
+secret = false
+description = "Enable cohort feasibility app overlay (batch client mode only)."
+examples = ["true", "false"]
+validators = ["bool"]
+
+[[vars.ENABLE_COHORT_FEASIBILITY_APP.bindings]]
+overlay = "base.runtime"
+prompt_order = 240
+prompt = false
+
+[[vars.ENABLE_COHORT_FEASIBILITY_APP.bindings]]
+overlay = "app.cohort_feasibility"
+prompt_order = 10
+prompt = false
+required_when_all = ["app:cohort_feasibility"]
+
+[vars.COHORT_FEASIBILITY_PORT]
+type = "int"
+default = "8090"
+secret = false
+description = "Internal cohort feasibility service port."
+examples = ["8090"]
+validators = ["port"]
+
+[[vars.COHORT_FEASIBILITY_PORT.bindings]]
+overlay = "app.cohort_feasibility"
+prompt_order = 30
+prompt = true
+applicable_when_all = ["app:cohort_feasibility"]
+
+[[overlays]]
+id = "base.runtime"
+name = "runtime_base"
+kind = "base"
+order = 10
+compose_file = "compose/base.yml"
+title = "Shared Runtime Base"
+summary = "Shared ingress and baseline mode/app/feature flags."
+wizard_enabled = false
+services = ["ingress"]
+
+[[overlays]]
+id = "mode.batch_client"
+name = "batch_client"
+kind = "mode"
+order = 21
+compose_file = "compose/modes/batch.client.yml"
+title = "Batch Client Mode"
+summary = "Localhost-only HTTP entrypoint for programmatic inference workloads."
+doc_path = "docs/modes/batch-client.md"
+availability_modes = ["batch_client"]
+compatible_features = ["api_egress", "metrics", "embedding_backend", "stt_backend"]
+compatible_apps = ["dataset_structuring", "cohort_feasibility"]
+services = []
+use_when = [
+  "no WebUI is required",
+  "localhost-only /v1 API is needed for scripts and batch clients",
+  "TLS termination at ingress is not required"
+]
+behavior = [
+  "ingress publishes batch API only on 127.0.0.1",
+  "direct worker port range is exposed only on localhost",
+  "batch mode keeps all backend services on docker_internal"
+]
+verify = [
+  "start the stack and call http://127.0.0.1:<BATCH_CLIENT_LISTEN_PORT>/v1/models",
+  "confirm frontend container is absent in batch mode",
+  "inspect runtime route map at /v1/ukbgpt/runtime"
+]
+access = [
+  "Local API: http://127.0.0.1:<BATCH_CLIENT_LISTEN_PORT>/v1/",
+  "Runtime discovery: http://127.0.0.1:<BATCH_CLIENT_LISTEN_PORT>/v1/ukbgpt/runtime",
+  "Cohort feasibility (when enabled): http://127.0.0.1:<BATCH_CLIENT_LISTEN_PORT>/feasibility/",
+  "Grafana (when metrics enabled): http://127.0.0.1:<BATCH_CLIENT_LISTEN_PORT>/grafana/"
+]
+
+[[overlays]]
+id = "mode.chatbot_provider"
+name = "chatbot_provider"
+kind = "mode"
+order = 20
+compose_file = "compose/modes/frontend.provider.yml"
+title = "Chatbot Provider Mode"
+summary = "Interactive deployment with OpenWebUI and HTTPS ingress."
+doc_path = "docs/modes/chatbot-provider.md"
+availability_modes = ["chatbot_provider"]
+compatible_features = ["rate_limiting", "ldap", "metrics", "chat_purger", "embedding_backend", "stt_backend"]
+compatible_apps = ["dictation"]
+services = ["frontend"]
+use_when = [
+  "browser access through OpenWebUI is required",
+  "HTTPS termination is required at ingress",
+  "LDAP-backed user authentication may be enabled",
+  "the optional dictation UI should be reachable via ingress"
+]
+behavior = [
+  "ingress publishes 0.0.0.0:80 and 0.0.0.0:443",
+  "OpenWebUI local state is persisted under OPENWEBUI_DATA_DIR",
+  "OPENAI_API_BASE_URLS carries the primary LLM backend and, when enabled, the embedding backend for external OpenWebUI API usage",
+  "STT remains wired through the dedicated AUDIO_STT_OPENAI_API_BASE_URL path rather than OPENAI_API_BASE_URLS",
+  "startup fails fast when TLS key/cert or WEBUI_SECRET_KEY is missing"
+]
+verify = [
+  "start the stack and confirm WebUI is reachable at https://<SERVER_NAME>/",
+  "confirm startup output reports chatbot provider mode and no batch API route",
+  "if OpenWebUI does not start, inspect OPENWEBUI_DATA_DIR permissions and ownership"
+]
+access = [
+  "WebUI: https://<SERVER_NAME>/",
+  "Grafana (when metrics enabled): https://<SERVER_NAME>/grafana/",
+  "Dictation (when enabled): https://<SERVER_NAME>/dictation/"
+]
+
+[[overlays]]
+id = "feature.rate_limiting"
+name = "rate_limiting"
+kind = "feature"
+order = 39
+compose_file = "compose/features/rate_limiting.yml"
+title = "Rate Limiting"
+summary = "Optional OpenWebUI Pipelines sidecar for static or adaptive request rate limiting."
+doc_path = "docs/features/rate-limiting.md"
+availability_modes = ["chatbot_provider"]
+toggle_var = "ENABLE_RATE_LIMITING"
+services = ["pipelines"]
+use_when = [
+  "chatbot mode should apply static or adaptive request limits before requests reach the model backend",
+  "operators want OpenWebUI to manage rate limiting through the bundled Pipelines service"
+]
+behavior = [
+  "adds an internal pipelines sidecar connected only to docker_internal",
+  "frontend keeps its direct backend path by default and appends the pipelines connection only when enabled",
+  "rate limiting applies to OpenWebUI provider traffic, including external /api/embeddings requests when the embedding backend is enabled",
+  "pipeline valves remain the admin-facing place to choose adaptive or static limiting"
+]
+verify = [
+  "confirm startup output reports Rate Limiting enabled",
+  "check /api/v1/pipelines/list in OpenWebUI for the internal http://pipelines:9099/v1 registration",
+  "inspect docker logs ukbgpt_pipelines when validating adaptive/static blocking behavior"
+]
+access = [
+  "pipelines is not host-published",
+  "frontend reaches the pipelines sidecar only on docker_internal"
+]
+
+[[overlays]]
+id = "feature.api_egress"
+name = "api_egress"
+kind = "feature"
+order = 43
+compose_file = "compose/features/api_egress.yml"
+title = "Batch API Egress"
+summary = "Pinned HTTPS proxy for additional internal LLM and embedding APIs in batch mode."
+doc_path = "docs/features/api-egress.md"
+availability_modes = ["batch_client"]
+toggle_var = "ENABLE_API_EGRESS"
+services = ["api_egress"]
+use_when = [
+  "batch mode should route requests to additional pinned internal model APIs",
+  "runtime egress must remain IP-pinned and TLS-validated"
+]
+behavior = [
+  "enables api_egress connected to docker_internal and dmz_egress",
+  "startup rewrites upstream addresses to pinned IPs and keeps SNI/Host explicitly configured",
+  "if ENABLE_API_EGRESS is unset, startup keeps compatibility by inferring enablement from address variables"
+]
+verify = [
+  "confirm startup output reports batch API egress enabled",
+  "call local /v1/models and verify responses can include api_egress-backed upstreams",
+  "inspect docker logs ukbgpt_api_egress for upstream connection failures"
+]
+access = [
+  "api_egress is not host-published",
+  "local clients continue to use batch ingress on 127.0.0.1:<BATCH_CLIENT_LISTEN_PORT>"
+]
+
+[[overlays]]
+id = "feature.chat_purger"
+name = "chat_purger"
+kind = "feature"
+order = 42
+compose_file = "compose/features/chat_purger.yml"
+title = "Chat Purger"
+summary = "Retention sidecar that deletes old OpenWebUI chats from local database."
+doc_path = "docs/features/chat-purger.md"
+availability_modes = ["chatbot_provider"]
+toggle_var = "ENABLE_CHAT_PURGER"
+services = ["chat_purger"]
+use_when = [
+  "local OpenWebUI chat retention must be time-bounded",
+  "operators need periodic cleanup without external storage"
+]
+behavior = [
+  "runs periodic deletion against OPENWEBUI_DATA_DIR/webui.db",
+  "defaults retention to 180 days and purge interval to 86400 seconds",
+  "is disabled automatically in batch client mode"
+]
+verify = [
+  "confirm startup output reports chat purger enabled",
+  "inspect docker logs ukbgpt_chat_purger for purge activity",
+  "verify OPENWEBUI_DATA_DIR is mounted and writable for runtime UID/GID"
+]
+access = [
+  "chat_purger has no host-published ports",
+  "service runs only on docker_internal"
+]
+
+[[overlays]]
+id = "base.dmz_egress"
+name = "dmz_egress"
+kind = "base"
+order = 44
+compose_file = "compose/features/dmz_egress.yml"
+title = "DMZ Egress Network"
+summary = "Routed bridge attached automatically when LDAP or API egress is enabled."
+wizard_enabled = false
+auto_enable_when_any = ["feature:ldap", "feature:api_egress"]
+services = []
+
+[[overlays]]
+id = "feature.embedding_backend"
+name = "embedding_backend"
+kind = "feature"
+order = 44
+compose_file = "compose/features/embedding_backend.yml"
+title = "Embedding Backend"
+summary = "Dedicated embedding worker backend selected via EMBEDDING_MODEL_DEPLOYMENT_CONFIG."
+doc_path = "docs/features/embedding-backend.md"
+availability_modes = ["chatbot_provider", "batch_client"]
+wizard_enabled = false
+services = []
+use_when = [
+  "retrieval embeddings should run on a dedicated worker set",
+  "embedding model lifecycle should be separated from the primary LLM backend"
+]
+behavior = [
+  "setting EMBEDDING_MODEL_DEPLOYMENT_CONFIG enables the embedding backend",
+  "startup appends a runtime-generated embedding compose file when the deployment config is present",
+  "the embedding backend is added to OpenWebUI's OPENAI_API_BASE_URLS provider list for external /api/models and /api/embeddings access",
+  "OpenWebUI internal RAG embeddings continue to use RAG_OPENAI_API_BASE_URL"
+]
+verify = [
+  "confirm startup output reports embedding backend enabled",
+  "inspect runtime discovery output for embedding workers and EMBEDDING_ENDPOINT",
+  "verify OpenWebUI exposes the embedding model through /api/models and accepts /api/embeddings requests"
+]
+access = [
+  "embedding workers are internal-only on docker_internal",
+  "external clients reach them through OpenWebUI's HTTPS API rather than directly"
+]
+
+[[overlays]]
+id = "feature.ldap"
+name = "ldap"
+kind = "feature"
+order = 41
+compose_file = "compose/features/ldap.yml"
+title = "LDAP Integration"
+summary = "Pinned LDAP/LDAPS identity airlock for chatbot provider mode."
+doc_path = "docs/features/ldap.md"
+availability_modes = ["chatbot_provider"]
+toggle_var = "ENABLE_LDAP"
+services = ["ldap_egress"]
+use_when = [
+  "user authentication must be delegated to an internal LDAP/AD service",
+  "directory traffic must traverse a pinned, monitored egress airlock"
+]
+behavior = [
+  "adds ldap_egress connected to docker_internal and dmz_egress",
+  "host firewall pins outbound traffic to LDAP_TARGET_IP only",
+  "upstream LDAPS certificate verification requires ROOT_CA_PATH"
+]
+verify = [
+  "confirm startup reports LDAP integration enabled with pinned target",
+  "verify frontend offers LDAP login with LDAP_SERVER_LABEL",
+  "inspect docker logs ukbgpt_ldap_egress when troubleshooting binds or TLS"
+]
+access = [
+  "LDAP is not host-published",
+  "frontend reaches LDAP via ukbgpt_ldap_egress on docker_internal"
+]
+
+[[overlays]]
+id = "feature.metrics"
+name = "metrics"
+kind = "feature"
+order = 40
+compose_file = "compose/features/metrics.yml"
+title = "Metrics"
+summary = "Exporter, Prometheus, Grafana, and optional localhost scrape tunnels."
+doc_path = "docs/features/metrics.md"
+availability_modes = ["chatbot_provider", "batch_client"]
+toggle_var = "ENABLE_INTERNAL_METRICS"
+services = ["exporter", "prometheus", "grafana"]
+use_when = [
+  "runtime metrics and dashboards are required",
+  "operators need Grafana access through ingress"
+]
+behavior = [
+  "adds exporter, Prometheus, and Grafana services",
+  "Grafana is routed through ingress under /grafana/",
+  "Grafana anonymous access is disabled; first login is the upstream default `admin` / `admin` unless an existing grafana-data volume already has a changed password",
+  "optional localhost scrape tunnels are controlled by ENABLE_METRICS_FORWARDING"
+]
+verify = [
+  "confirm startup output reports internal metrics enabled",
+  "open the Grafana route for the active mode",
+  "inspect docker logs ukbgpt_prometheus when troubleshooting scrape configuration"
+]
+access = [
+  "Chatbot provider mode: https://<SERVER_NAME>/grafana/",
+  "Batch mode: http://127.0.0.1:<BATCH_CLIENT_LISTEN_PORT>/grafana/",
+  "Optional scrape tunnel: http://127.0.0.1:8001/metrics"
+]
+
+[[overlays]]
+id = "feature.stt_backend"
+name = "stt_backend"
+kind = "feature"
+order = 45
+compose_file = "compose/features/stt_backend.yml"
+title = "STT Backend"
+summary = "Dedicated STT worker backend selected via STT_MODEL_DEPLOYMENT_CONFIG."
+doc_path = "docs/features/stt-backend.md"
+availability_modes = ["chatbot_provider", "batch_client"]
+wizard_enabled = false
+services = []
+use_when = [
+  "speech-to-text transcription should run on dedicated workers",
+  "dictation app should use an internal STT backend"
+]
+behavior = [
+  "setting STT_MODEL_DEPLOYMENT_CONFIG enables the STT backend",
+  "startup appends a runtime-generated STT compose file when the deployment config is present",
+  "OpenWebUI keeps STT on AUDIO_STT_OPENAI_API_BASE_URL and AUDIO_STT_MODEL instead of adding it to OPENAI_API_BASE_URLS"
+]
+verify = [
+  "confirm startup output reports STT backend enabled",
+  "inspect runtime discovery output for stt workers and STT_ENDPOINT",
+  "confirm startup output shows the dedicated STT backend wiring"
+]
+access = [
+  "stt workers are internal-only on docker_internal",
+  "OpenWebUI transcription traffic stays on the dedicated audio backend path"
+]
+
+[[overlays]]
+id = "app.cohort_feasibility"
+name = "cohort_feasibility"
+kind = "app"
+order = 62
+compose_file = "compose/apps/cohort_feasibility.yml"
+title = "Cohort Feasibility App"
+summary = "Aggregate-only cohort explorer routed through batch ingress under /feasibility/."
+doc_path = "docs/apps/cohort-feasibility.md"
+availability_modes = ["batch_client"]
+toggle_var = "ENABLE_COHORT_FEASIBILITY_APP"
+services = ["cohort_feasibility"]
+use_when = [
+  "aggregate cohort exploration is needed behind localhost-only batch ingress"
+]
+behavior = [
+  "app scans DATASET_STRUCTURING_DATA_ROOT for cohort_query_no_citations.db",
+  "route is exposed through ingress path /feasibility/",
+  "small-count protections and aggregate-only output remain enabled"
+]
+verify = [
+  "confirm startup reports cohort feasibility app enabled",
+  "open http://127.0.0.1:<BATCH_CLIENT_LISTEN_PORT>/feasibility/",
+  "inspect docker logs ukbgpt_cohort_feasibility if route fails"
+]
+access = [
+  "http://127.0.0.1:<BATCH_CLIENT_LISTEN_PORT>/feasibility/"
+]
+
+[[overlays]]
+id = "app.dataset_structuring"
+name = "dataset_structuring"
+kind = "app"
+order = 61
+compose_file = "compose/apps/dataset_structuring.yml"
+title = "Dataset Structuring App"
+summary = "Internal utility container for on-demand dataset processing jobs."
+doc_path = "docs/apps/dataset-structuring.md"
+availability_modes = ["batch_client"]
+toggle_var = "ENABLE_DATASET_STRUCTURING_APP"
+services = ["dataset_structuring"]
+use_when = [
+  "internal batch preprocessing jobs should run inside the managed stack",
+  "dataset processing should reuse local batch ingress discovery and embeddings routes"
+]
+behavior = [
+  "container stays alive and jobs are triggered with docker exec",
+  "requires DATASET_STRUCTURING_DATA_ROOT mount",
+  "CPU and memory defaults are auto-derived when not explicitly provided"
+]
+verify = [
+  "confirm startup reports dataset structuring app enabled",
+  "run a smoke docker exec job against mounted dataset root",
+  "inspect docker logs ukbgpt_dataset_structuring on failures"
+]
+access = [
+  "no direct browser endpoint",
+  "execute jobs via docker exec ukbgpt_dataset_structuring ..."
+]
+
+[[overlays]]
+id = "app.dictation"
+name = "dictation"
+kind = "app"
+order = 60
+compose_file = "compose/apps/dictation.yml"
+title = "Dictation App"
+summary = "Dedicated internal STT UI exposed through ingress under /dictation/."
+doc_path = "docs/apps/dictation.md"
+availability_modes = ["chatbot_provider"]
+toggle_var = "ENABLE_DICTATION_APP"
+services = ["dictation"]
+use_when = [
+  "a dedicated dictation UI is required in chatbot provider mode"
+]
+behavior = [
+  "dictation is exposed only via ingress path /dictation/",
+  "ENABLE_DICTATION_APP requires STT_MODEL_DEPLOYMENT_CONFIG",
+  "STT-only backend mode is supported only when dictation is enabled"
+]
+verify = [
+  "confirm startup reports dictation enabled",
+  "open https://<SERVER_NAME>/dictation/",
+  "if startup fails, verify STT_MODEL_DEPLOYMENT_CONFIG is set"
+]
+access = [
+  "Dictation: https://<SERVER_NAME>/dictation/"
+]

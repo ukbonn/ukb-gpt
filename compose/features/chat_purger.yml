@@ -1,0 +1,36 @@
+services:
+  # ============================================================================
+  # CHAT PURGER (OpenWebUI retention sidecar)
+  # ============================================================================
+  # ROLE: Periodically deletes chat rows older than CHAT_HISTORY_RETENTION_DAYS.
+  # SECURITY:
+  #   - Runs only on docker_internal (no routed gateway).
+  #   - No host ports exposed.
+  #   - Uses same security supervisor as other services.
+  chat_purger:
+    extends:
+      file: ./hardening.yml
+      service: hardened_common
+    build:
+      context: ..
+      dockerfile: images/openwebui/chat_purger.Dockerfile
+      args:
+        CHAT_PURGER_IMAGE: "${CHAT_PURGER_IMAGE:-python:3.12-slim-bookworm}"
+    container_name: ukbgpt_chat_purger
+    user: "${OPENWEBUI_RUNTIME_UID:-999}:${OPENWEBUI_RUNTIME_GID:-999}"
+    environment:
+      - "CHAT_HISTORY_RETENTION_DAYS=${CHAT_HISTORY_RETENTION_DAYS:-180}"
+      - "CHAT_HISTORY_PURGE_INTERVAL_SECONDS=${CHAT_HISTORY_PURGE_INTERVAL_SECONDS:-86400}"
+      - "CHAT_HISTORY_DB_PATH=/app/backend/data/webui.db"
+    volumes:
+      - type: bind
+        source: "${OPENWEBUI_DATA_DIR:?Error: OPENWEBUI_DATA_DIR must be set}"
+        target: /app/backend/data
+    networks:
+      - docker_internal
+    depends_on:
+      - frontend
+    restart: on-failure
+    read_only: true
+    tmpfs:
+      - /tmp

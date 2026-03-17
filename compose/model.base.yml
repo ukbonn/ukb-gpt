@@ -1,0 +1,43 @@
+services:
+  # ----------------------------------------------------------------------------
+  # TEMPLATE SERVICE (Not run directly)
+  # ----------------------------------------------------------------------------
+  base_worker_template:
+    extends:
+      file: ./hardening.yml
+      service: hardened_common
+    image: "placeholder"
+
+    # Standard Environment & Networking
+    environment:
+      - "HF_HOME=/huggingface-cache"
+      - "HF_MODULES_CACHE=/tmp_exec/hf_modules"
+      - "XDG_CONFIG_HOME=/tmp/.config"
+      - "VLLM_CACHE_ROOT=/tmp/vllm"
+      - "TMPDIR=/tmp_exec"
+      - "TRITON_CACHE_DIR=/tmp_exec/triton"
+      - "TORCHINDUCTOR_CACHE_DIR=/tmp_exec/torchinductor"
+      - "VLLM_NO_USAGE_STATS=1"
+      - "HF_HUB_OFFLINE=1"
+      - "TRANSFORMERS_OFFLINE=1"
+    # vLLM/PyTorch/Triton runtimes write JIT/cache artifacts in multiple paths.
+    # Keep worker rootfs writable for stability; hardening remains via network
+    # isolation, cap_drop, and no-new-privileges.
+    read_only: false
+    tmpfs:
+      - /tmp
+      - /tmp_exec:rw,nosuid,nodev,exec
+    networks:
+      - docker_internal
+    volumes:
+      - type: bind
+        source: "${HF_HOME:-/mnt/.cache/huggingface}"
+        target: /huggingface-cache
+
+# ------------------------------------------------------------------------------
+# SHARED INFRASTRUCTURE DEFINITIONS
+# ------------------------------------------------------------------------------
+# start.py loads this file first, so these definitions exist
+# when the specific model file is loaded.
+networks:
+  docker_internal:

@@ -1,0 +1,23 @@
+services:
+  backend_router:
+    extends:
+      file: ../hardening.yml
+      service: hardened_common
+    build:
+      context: ../..
+      dockerfile: images/nginx/backend_router/Dockerfile
+      args:
+        NGINX_BACKEND_ROUTER_IMAGE: "${NGINX_BACKEND_ROUTER_IMAGE:-nginx:1.25-alpine}"
+    environment:
+      - "CHECK_URL=http://127.0.0.1:5000/health"
+    networks:
+      - docker_internal
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/healthcheck.sh"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID

@@ -1,0 +1,25 @@
+server {
+    listen ${LDAP_LISTEN_IP}:${LDAP_LISTEN_PORT};
+
+    # ----------------------------------------------------------------------
+    # REDUNDANT LAYER 3: Strict Identity-Based Whitelist
+    # ----------------------------------------------------------------------
+    
+    # 1. ALLOW: ONLY the Frontend (OpenWebUI)
+    # No other container (GPU Workers, Monitoring) can talk to this proxy.
+    allow ${ALLOWED_CLIENT_IP};
+
+    # 2. DENY: Everyone else
+    deny all; 
+
+    # --- LDAPS Wrapping ---
+    proxy_pass ${LDAP_TARGET_IP}:${LDAP_TARGET_PORT};
+    proxy_ssl on;
+    proxy_ssl_verify on;
+    proxy_ssl_trusted_certificate /etc/nginx/certs/root_ca.crt;
+    proxy_ssl_server_name on;
+    proxy_ssl_name ${LDAP_TARGET_SNI};
+    
+    proxy_connect_timeout ${LDAP_PROXY_CONNECT_TIMEOUT};
+    proxy_timeout ${LDAP_PROXY_TIMEOUT};
+}

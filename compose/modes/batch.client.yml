@@ -1,0 +1,16 @@
+services:
+  # ============================================================================
+  # INGRESS (Batch Client Mode)
+  # ============================================================================
+  # In batch client mode we bind localhost HTTP, direct worker range, and metrics tunnels.
+  ingress:
+    ports:
+      # --- LOCALHOST BATCH API ---
+      - "127.0.0.1:${BATCH_CLIENT_LISTEN_PORT:-30000}:${BATCH_CLIENT_LISTEN_PORT:-30000}"
+
+      # --- LOCALHOST DIRECT WORKER RANGE ---
+      - "127.0.0.1:${BATCH_CLIENT_DIRECT_PORT_START:-30001}-${BATCH_CLIENT_DIRECT_PORT_END:-30032}:${BATCH_CLIENT_DIRECT_PORT_START:-30001}-${BATCH_CLIENT_DIRECT_PORT_END:-30032}"
+
+      # --- METRICS TUNNELS (Localhost Only) ---
+      - "127.0.0.1:5000-5007:5000-5007"
+      - "127.0.0.1:8001:8001"

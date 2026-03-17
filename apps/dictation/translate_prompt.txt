@@ -1,0 +1,6 @@
+Translate the following transcript into {{TARGET_LANGAUGE}}.
+
+If possible, keep names, numbers, and medical terms unchanged when they are context-sensitive.
+Return only the translated text.
+
+{{TEXT}}

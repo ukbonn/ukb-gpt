@@ -1,0 +1,137 @@
+# ==============================================================================
+# BATCH CLIENT MODE (LOCALHOST-ONLY HTTP INGRESS)
+# ==============================================================================
+# This configuration is ONLY used when BATCH_CLIENT_MODE_ON=true.
+#
+# GOAL:
+#   - Expose a single, localhost-bound HTTP endpoint for batch inference.
+#   - Load-balance across local chat workers and optional embedding workers.
+#   - Keep the same hardened, verbose configuration style as the main ingress.
+#
+# WHY HTTP?
+#   In batch mode the ingress is bound to 127.0.0.1 on the host, so TLS is
+#   unnecessary. We avoid private key handling and only rely on a corporate
+#   Root CA for OUTBOUND TLS (handled by the API egress proxy).
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# UPSTREAM: Batch Chat Backend
+# ------------------------------------------------------------------------------
+upstream batch_chat_backend {
+    least_conn;
+    include /etc/nginx/conf.d/batch_chat_upstreams.inc;
+    keepalive 64;
+}
+
+# ------------------------------------------------------------------------------
+# UPSTREAM: Batch Embedding Backend
+# ------------------------------------------------------------------------------
+upstream batch_embedding_backend {
+    least_conn;
+    include /etc/nginx/conf.d/batch_embedding_upstreams.inc;
+    keepalive 64;
+}
+
+# ------------------------------------------------------------------------------
+# LOCALHOST HTTP INGRESS
+# ------------------------------------------------------------------------------
+server {
+    # The host port is bound to 127.0.0.1 in docker-compose (localhost only).
+    listen ${BATCH_CLIENT_LISTEN_PORT};
+    # Always accept internal docker hostname "ingress" plus localhost variants.
+    # This keeps intra-stack clients working even when SERVER_NAME differs.
+    server_name ${SERVER_NAME} ingress localhost 127.0.0.1;
+
+    # Keep payloads large enough for long prompts / batch inputs.
+    client_max_body_size 100M;
+
+    # --- SECURITY: ACL ---
+    # This list is injected from the environment.
+    # In batch mode it should only allow localhost + Docker internal ranges.
+    ${NGINX_ACL_ALLOW_LIST}
+    deny all;
+
+    # --- SECURITY: Rate Limiting ---
+    limit_req zone=perip_limit burst=1000 nodelay;
+
+    # ==========================================================================
+    # OPTIONAL MODULE: GRAFANA (Only when ENABLE_INTERNAL_METRICS=true)
+    # ==========================================================================
+    ${GRAFANA_LOCATION_BLOCK}
+
+    # ==========================================================================
+    # BATCH API ROUTING
+    # ==========================================================================
+    location = /v1/ukbgpt/runtime {
+        root /run;
+        default_type application/json;
+        add_header Cache-Control "no-store" always;
+        try_files /ukbgpt_runtime.json =404;
+    }
+
+    location /v1/embeddings {
+        proxy_pass http://batch_embedding_backend;
+        proxy_http_version 1.1;
+
+        # Forwarding headers (Traceability / Auditing)
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # WebSocket / Streaming Support
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+
+        # Streaming responses (token-by-token) must not be buffered
+        proxy_buffering off;
+
+        # Long-running model requests
+        proxy_connect_timeout 60s;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+    }
+
+    ${COHORT_FEASIBILITY_LOCATION_BLOCK}
+
+    location / {
+        proxy_pass http://batch_chat_backend;
+        proxy_http_version 1.1;
+
+        # Forwarding headers (Traceability / Auditing)
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # WebSocket / Streaming Support
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+
+        # Streaming responses (token-by-token) must not be buffered
+        proxy_buffering off;
+
+        # Long-running model requests
+        proxy_connect_timeout 60s;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+    }
+
+    # Lightweight health endpoint for local checks
+    location /health {
+        access_log off;
+        return 200 "healthy\n";
+    }
+}
+
+# ------------------------------------------------------------------------------
+# DEFAULT DENY (Unknown Hostnames)
+# ------------------------------------------------------------------------------
+server {
+    listen ${BATCH_CLIENT_LISTEN_PORT} default_server;
+    server_name _;
+    return 444;
+}
+
+# Direct worker servers are generated at runtime in batch mode.
+include /etc/nginx/conf.d/batch_direct_servers.conf;

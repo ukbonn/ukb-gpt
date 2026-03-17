@@ -1,0 +1,27 @@
+services:
+  ingress:
+    ports: !reset []
+    environment:
+      FORBIDDEN_IPS: "${TEST_FORBIDDEN_ICMP_TARGET:?Error: TEST_FORBIDDEN_ICMP_TARGET must be set}"
+      FORBIDDEN_HTTPS_TARGETS: ""
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: images/dummy_vllm_worker/Dockerfile
+      args:
+        DUMMY_VLLM_WORKER_IMAGE: "${DUMMY_VLLM_WORKER_IMAGE:-python:3.11-slim}"
+    environment:
+      FORBIDDEN_IPS: "${TEST_FORBIDDEN_ICMP_TARGET:?Error: TEST_FORBIDDEN_ICMP_TARGET must be set}"
+      FORBIDDEN_HTTPS_TARGETS: ""
+    command: ["sleep", "infinity"]
+
+  ldap_egress:
+    environment:
+      FORBIDDEN_IPS: "${TEST_FORBIDDEN_ICMP_TARGET:?Error: TEST_FORBIDDEN_ICMP_TARGET must be set}"
+      FORBIDDEN_HTTPS_TARGETS: ""
+
+  worker_0:
+    environment:
+      FORBIDDEN_IPS: "${TEST_FORBIDDEN_ICMP_TARGET:?Error: TEST_FORBIDDEN_ICMP_TARGET must be set}"
+      FORBIDDEN_HTTPS_TARGETS: ""
