@@ -1,15 +1,11 @@
 # UKB-GPT
 
-Single-host, isolation-first GenAI stack for sensitive data processing.
-
-This repository is for running local chat, embedding, and STT backends with strict network isolation and pinned egress exceptions only where explicitly configured.
+Single-host, isolation-first GenAI stack for sensitive data processing. This repository is for running local chat, embedding, and STT backends with strict network isolation and pinned egress exceptions only where explicitly configured.
 
 ![Diagram](./docs/diagram.png "Architecture diagram")
 
 
-Read the threat model and disclaimer first:
-
-- [Security risk assessment and disclaimer](docs/README_RISK_ASSESSMENT_AND_DISCLAIMER.md)
+Read the threat model and disclaimer first: [Security risk assessment and disclaimer](docs/README_RISK_ASSESSMENT_AND_DISCLAIMER.md)
 
 ## Quick Start
 
