@@ -1,15 +1,6 @@
 # Security Risk Assessment and Disclaimer
 
-**Project:** UKB-GPT (single-host, isolation-first LLM stack)
-
-| Field | Value |
-| --- | --- |
-| Document | Security Risk Assessment and Disclaimer |
-| Version | 0.4 |
-| Last updated | 2026-03-16 |
-| Intended audience | Security reviewers, deployers, auditors |
-| Security contact | See `SECURITY.md` |
-
+**Project:** UKB-GPT 
 > This document describes the intended security posture of this repository. It is not a certification, warranty, or substitute for an organization-specific security review, DPIA, or penetration test.
 
 ## 1. Executive Summary
