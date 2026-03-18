@@ -62,13 +62,4 @@ If you use this repository or its architecture in your research, please cite our
 *Sebastian Nowak, Jann-Frederick Laß, Narine Mesropyan, Babak Salam, Nico Piel, Wolfgang Block, Alois Martin Sprinkart, Alexander Isaak, Benjamin Wulff, Julian Alexander Luetkens*  
 arXiv preprint, 2026. *(arXiv ID coming soon)*
 
-**BibTeX:**
-```bibtex
-@article{nowak2026secure,
-  title={Secure On-Premise Deployment of Open-Weights Large Language Models in Radiology: An Isolation-First Architecture with Prospective Pilot Evaluation},
-  author={Nowak, Sebastian and La{\ss}, Jann-Frederick and Mesropyan, Narine and Salam, Babak and Piel, Nico and Block, Wolfgang and Sprinkart, Alois Martin and Isaak, Alexander and Wulff, Benjamin and Luetkens, Julian Alexander},
-  journal={arXiv preprint},
-  year={2026}
-}
-```
 
