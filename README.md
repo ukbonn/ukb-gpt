@@ -47,7 +47,7 @@ The tree below is a guided overview of the main tracked files and folders. Runti
 ├── pytest.ini                                    # Pytest collection, path, and marker configuration
 ├── start.py                                      # Main CLI for the wizard, validation, and startup
 ├── stop.py                                       # Shutdown helper for the Compose project
-├── apps/                                         # App-specific source trees for optional add-ons
+├── apps/                                         # App-specific folders for optional add-ons
 │   ├── dictation/                                # Gradio speech-to-text app exposed via ingress
 │   │   ├── app.py                                # Dictation application entrypoint
 │   │   ├── Dockerfile                            # Image build recipe for the dictation app
@@ -56,7 +56,7 @@ The tree below is a guided overview of the main tracked files and folders. Runti
 │   │   └── README.md                             # Dictation-specific usage notes
 │   ├── cohort_feasibility/                       # Placeholder folder for the cohort feasibility app
 │   │   └── README.md                             # Temporary note until app materials are published
-│   ├── dataset_structuring/                      # Placeholder folder for dataset structuring assets
+│   ├── dataset_structuring/                      # Placeholder folder for the dataset structuring app
 │   │   └── README.md                             # Temporary note until app materials are published
 │   └── icd_10_coding/                            # Placeholder folder for the ICD-10 coding app
 │       └── README.md                             # Temporary note until app materials are published
@@ -67,16 +67,16 @@ The tree below is a guided overview of the main tracked files and folders. Runti
 │   ├── schema.toml                               # Central env schema used by the wizard and docs tooling
 │   ├── modes/                                    # Runtime-mode overlays
 │   │   ├── frontend.provider.yml                 # Chatbot-provider mode with frontend-facing services
-│   │   └── batch.client.yml                      # Batch-client mode for localhost API access
+│   │   └── batch.client.yml                      # Batch-client mode for localhost-only API access
 │   ├── features/                                 # Optional feature overlays layered onto a mode
-│   │   ├── ldap.yml                              # LDAP authentication integration
-│   │   ├── api_egress.yml                        # Pinned upstream API egress routing
-│   │   ├── metrics.yml                           # Prometheus and Grafana observability services
+│   │   ├── ldap.yml                              # LDAPS egress proxy overlay used by frontend directory authentication
+│   │   ├── api_egress.yml                        # Pinned HTTPS egress proxy overlay for upstream APIs in batch mode
+│   │   ├── metrics.yml                           # Prometheus, Grafana, and exporter services overlay
 │   │   ├── chat_purger.yml                       # Automated OpenWebUI chat retention cleanup
-│   │   ├── rate_limiting.yml                     # Adaptive rate-limiting pipeline support
-│   │   ├── embedding_backend.yml                 # Optional embedding backend wiring
-│   │   ├── stt_backend.yml                       # Optional speech-to-text backend wiring
-│   │   └── dmz_egress.yml                        # Extra DMZ egress handling for outbound traffic
+│   │   ├── rate_limiting.yml                     # OpenWebUI Pipelines overlay for adaptive rate limiting
+│   │   ├── embedding_backend.yml                 # Marker overlay selected when an optional embedding backend is enabled
+│   │   ├── stt_backend.yml                       # Marker overlay selected when an optional STT backend is enabled
+│   │   └── dmz_egress.yml                        # Defines the routed `dmz_egress` network used by explicit airlocks
 │   ├── apps/                                     # Compose overlays for optional application services
 │   │   ├── dictation.yml                         # Dictation app service overlay
 │   │   ├── cohort_feasibility.yml                # Cohort feasibility app service overlay
@@ -115,30 +115,30 @@ The tree below is a guided overview of the main tracked files and folders. Runti
 │   │   ├── backend_router/                       # Internal router in front of model workers
 │   │   ├── api_egress/                           # Allowlisted egress proxy for upstream APIs
 │   │   └── ldap_egress/                          # Allowlisted egress proxy for LDAP traffic
-│   ├── openwebui/                                # Customized OpenWebUI image plus pipeline helpers
-│   │   ├── pipelines/                            # Custom OpenWebUI pipeline implementations
-│   │   └── functions/                            # Custom OpenWebUI function snippets
-│   ├── metrics/                                  # Assets for Prometheus, Grafana, and exporters
+│   ├── openwebui/                                # Customized OpenWebUI images plus pipeline and retention helpers
+│   │   ├── pipelines/                            # Custom OpenWebUI Pipelines implementations
+│   │   └── functions/                            # Custom OpenWebUI Functions plugins
+│   ├── metrics/                                  # Build assets for Prometheus, Grafana, and the Nginx metrics exporter
 │   │   ├── prometheus/                           # Prometheus image and generated-config template
 │   │   ├── grafana/                              # Grafana image and dashboard provisioning
-│   │   └── exporter/                             # Metrics exporter image context
-│   ├── vllm_worker/                              # Primary worker image for model-serving containers
-│   └── dummy_vllm_worker/                        # Minimal fake worker image used by tests
-├── security_helpers/                             # Host-side scripts that enforce and inspect isolation
+│   │   └── exporter/                             # Nginx Prometheus exporter image context
+│   ├── vllm_worker/                              # Main vLLM-based worker image for model-serving containers
+│   └── dummy_vllm_worker/                        # Dummy OpenAI-compatible worker image used by tests
+├── security_helpers/                             # Host and container helper scripts for isolation enforcement and monitoring
 │   ├── apply_host_firewall.py                    # Applies host firewall rules for network isolation
-│   ├── install_security_helpers.sh               # Installs helper scripts on the host
-│   ├── active_isolation_monitoring_entrypoint.sh # Runtime monitor for isolation enforcement
-│   ├── check_egress.sh                           # Helper for validating outbound connectivity rules
-│   ├── healthcheck.sh                            # Shared healthcheck script for hardened containers
-│   └── nginx_debug_dump.sh                       # Troubleshooting helper for Nginx runtime config
+│   ├── install_security_helpers.sh               # Installs container-side helper scripts and minimal network tools into images
+│   ├── active_isolation_monitoring_entrypoint.sh # Container entrypoint wrapper that monitors for isolation failures
+│   ├── check_egress.sh                           # Container-side probe for validating blocked or allowed network reachability
+│   ├── healthcheck.sh                            # Shared healthcheck script copied into hardened containers
+│   └── nginx_debug_dump.sh                       # Container-side troubleshooting helper for Nginx runtime config
 ├── tests/                                        # Managed-stack integration and isolation test suite
 │   ├── README.md                                 # Testing model, markers, and common commands
 │   ├── conftest.py                               # Shared fixtures that boot and tear down test stacks
 │   ├── helpers/                                  # Test helpers for Docker, PKI, networking, and fixtures
 │   ├── integration/                              # End-to-end behavior tests across runtime modes
 │   ├── isolation/                                # Security-boundary and hardening regression tests
-│   ├── model_deployments/                        # Sample deployment TOMLs used by tests
-│   ├── compose.test.*.yml                        # Compose fragments for test-only helpers and mocks
+│   ├── model_deployments/                        # Sample deployment TOMLs consumed by the test suite
+│   ├── compose.test.*.yml                        # Test-only Compose fragments for helper containers and mocks
 │   └── mock_api_server_entrypoint.sh             # Entrypoint for the mock upstream API in tests
 └── utils/                                        # Shared Python modules behind startup and generation tools
     ├── stack/                                    # Core stack orchestration logic used by the CLI
@@ -150,7 +150,7 @@ The tree below is a guided overview of the main tracked files and folders. Runti
     └── scripts/                                  # Standalone helper scripts
         ├── build_docs.py                         # Generates docs from schema and model metadata
         ├── configure_env.py                      # Standalone entrypoint for the interactive `.env` wizard
-        └── create_localhost_pki.py               # Creates localhost certificates for local runs and tests
+        └── create_localhost_pki.py               # Creates localhost certificates for manual local HTTPS testing
 ```
 
 ## Where To Go Next
@@ -158,7 +158,7 @@ The tree below is a guided overview of the main tracked files and folders. Runti
 - New operator: [Operational docs hub](docs/README.md)
 - Common prerequisites and backend selection: [Common setup](docs/setup-basics.md)
 - Tests: [tests/README.md](tests/README.md)
-- Security disclosure: [SECURITY.md](SECURITY.md)
+- Legal and risk docs: [Disclaimer](docs/disclaimer.md) and [Security risk assessment](docs/risk_assessment.md)
 
 ## Useful Commands
 
@@ -176,5 +176,6 @@ Secrets can be exported in the shell or provided via `*_FILE` variables such as 
 If you use this repository or its architecture in your research, please cite our paper:
 
 **Secure On-Premise Deployment of Open-Weights Large Language Models in Radiology: An Isolation-First Architecture with Prospective Pilot Evaluation**  
-*Sebastian Nowak, Jann-Frederick Laß, Narine Mesropyan, Babak Salam, Nico Piel, Wolfgang Block, Alois Martin Sprinkart, Alexander Isaak, Benjamin Wulff, Julian Alexander Luetkens*  
+Sebastian Nowak\*, Jann-Frederick Laß\*, Narine Mesropyan, Babak Salam, Nico Piel, Wolfgang Block, Alois Martin Sprinkart, Julian Alexander Luetkens, Benjamin Wulff\*, Alexander Isaak\*  
+*\* contributed equally*  
 arXiv preprint, 2026. *(arXiv ID coming soon)*
