@@ -4,7 +4,8 @@ This is the deployment hub for the single-host, network-isolated stack.
 
 Before deploying, read:
 
-- [Security risk assessment and disclaimer](./README_RISK_ASSESSMENT_AND_DISCLAIMER.md)
+- [Disclaimer](./disclaimer.md)
+- [Security risk assessment](./risk_assessment.md)
 
 ## 1. Common Setup
 

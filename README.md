@@ -5,7 +5,9 @@ Single-host, isolation-first GenAI stack for sensitive data processing. This rep
 ![Diagram](./docs/diagram.png "Architecture diagram")
 
 
-Read the threat model and disclaimer first: [Security risk assessment and disclaimer](docs/README_RISK_ASSESSMENT_AND_DISCLAIMER.md)
+Read the [disclaimer](docs/disclaimer.md) and [security risk assessment](docs/risk_assessment.md) first.
+
+**By cloning, forking, or running this software, you acknowledge that you have read this [disclaimer](docs/disclaimer.md) and agree to use the software at your own risk.**
 
 ## Quick Start
 
@@ -94,7 +96,8 @@ The tree below is a guided overview of the main tracked files and folders. Runti
 |   |-- README.md                                 # Main operator documentation hub
 |   |-- setup-basics.md                           # Common setup and prerequisite guide
 |   |-- lifecycle.md                              # Runtime checks, logs, and shutdown guide
-|   |-- README_RISK_ASSESSMENT_AND_DISCLAIMER.md  # Threat model and deployment disclaimer
+|   |-- disclaimer.md                             # Legal usage terms, warranty disclaimer, and liability limits
+|   |-- risk_assessment.md                        # Security posture, trust boundaries, residual risks, and audit focus
 |   |-- diagram.png                               # Architecture diagram shown in this README
 |   |-- modes/                                    # Detailed runtime-mode documentation
 |   |   |-- chatbot-provider.md                   # WebUI and HTTPS deployment guide
@@ -175,4 +178,3 @@ If you use this repository or its architecture in your research, please cite our
 **Secure On-Premise Deployment of Open-Weights Large Language Models in Radiology: An Isolation-First Architecture with Prospective Pilot Evaluation**  
 *Sebastian Nowak, Jann-Frederick Laß, Narine Mesropyan, Babak Salam, Nico Piel, Wolfgang Block, Alois Martin Sprinkart, Alexander Isaak, Benjamin Wulff, Julian Alexander Luetkens*  
 arXiv preprint, 2026. *(arXiv ID coming soon)*
-

@@ -24,7 +24,7 @@ Why:
 
 ## Important Context
 
-- Read the security posture first: [README_RISK_ASSESSMENT_AND_DISCLAIMER.md](../README_RISK_ASSESSMENT_AND_DISCLAIMER.md)
+- Read the [disclaimer](../disclaimer.md) and [security risk assessment](../risk_assessment.md) first
 - User-facing entrypoint: [start.py](../../start.py)
 - Canonical schema: [compose/schema.toml](../../compose/schema.toml)
 
