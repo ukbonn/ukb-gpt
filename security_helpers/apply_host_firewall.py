@@ -25,6 +25,7 @@ EGRESS_CHAIN = "UKBGPT-EGRESS"
 INTERNAL_NET = "br-internal"
 INGRESS_NET = "br-dmz-ingress"
 EGRESS_NET = "br-dmz-egress"
+TRUE_VALUES = {"1", "true", "yes", "on"}
 
 
 @dataclass(frozen=True)
@@ -66,6 +67,18 @@ def _run_cmd(argv: list[str], *, required: bool = True) -> bool:
 
 def _has_cmd(cmd: str) -> bool:
     return shutil.which(cmd) is not None
+
+
+def _env_enabled(name: str) -> bool:
+    raw = os.getenv(name)
+    return raw is not None and raw.strip().lower() in TRUE_VALUES
+
+
+def _egress_targets_configured() -> bool:
+    return any(
+        (os.getenv(name) or "").strip()
+        for name in ("UKBGPT_FIREWALL_EGRESS_RULES", "EGRESS_TARGET_IPS", "EGRESS_TARGET_IP", "LDAP_TARGET_IP")
+    )
 
 
 def _wait_for_interface(iface: str, *, retries: int = 15, required: bool = False) -> bool:
@@ -369,27 +382,36 @@ def enforce_ipv4_rules() -> bool:
     egress_iface_present = _wait_for_interface(EGRESS_NET, required=False)
     include_egress = False
     if egress_iface_present:
-        include_egress = True
-        try:
-            all_rules = _parse_egress_rules()
-        except ValueError as exc:
-            print(f"{RED}      >> CRITICAL: {exc}{NC}")
-            return False
-        v4_rules = [rule for rule in all_rules if ":" not in rule.address]
-        if not all_rules:
-            print(
-                f"{RED}      >> CRITICAL: UKBGPT_FIREWALL_EGRESS_RULES/EGRESS_TARGET_IP/LDAP_TARGET_IP "
-                f"missing for active egress bridge.{NC}"
-            )
-            if not _populate_egress_chain("iptables", [], description_prefix="IPv4"):
+        egress_expected = _env_enabled("UKBGPT_EXPECT_EGRESS_BRIDGE")
+        include_egress = egress_expected or _egress_targets_configured()
+        if include_egress:
+            try:
+                all_rules = _parse_egress_rules()
+            except ValueError as exc:
+                print(f"{RED}      >> CRITICAL: {exc}{NC}")
                 return False
-            return False
-        print(
-            f"{GRAY}      Target rule(s): "
-            f"{', '.join(f'{rule.protocol}:{rule.address}:{rule.port}' for rule in all_rules)}{NC}"
-        )
-        if not _populate_egress_chain("iptables", v4_rules, description_prefix="IPv4"):
-            return False
+            v4_rules = [rule for rule in all_rules if ":" not in rule.address]
+            if not all_rules:
+                print(
+                    f"{RED}      >> CRITICAL: UKBGPT_FIREWALL_EGRESS_RULES/EGRESS_TARGET_IP/LDAP_TARGET_IP "
+                    f"missing for active egress bridge.{NC}"
+                )
+                if not _populate_egress_chain("iptables", [], description_prefix="IPv4"):
+                    return False
+                return False
+            print(
+                f"{GRAY}      Target rule(s): "
+                f"{', '.join(f'{rule.protocol}:{rule.address}:{rule.port}' for rule in all_rules)}{NC}"
+            )
+            if not _populate_egress_chain("iptables", v4_rules, description_prefix="IPv4"):
+                return False
+        else:
+            print(
+                f"{YELLOW}      Interface present, but no egress airlock is enabled for this startup. "
+                f"Treating {EGRESS_NET} as stale/disabled.{NC}"
+            )
+            if not _flush_chain("iptables", EGRESS_CHAIN):
+                return False
     else:
         print(f"{GRAY}      Interface not found (feature disabled). Skipping.{NC}")
         if not _flush_chain("iptables", EGRESS_CHAIN):
@@ -427,15 +449,24 @@ def enforce_ipv6_rules() -> bool:
 
     include_egress = False
     if _wait_for_interface(EGRESS_NET, required=False):
-        include_egress = True
-        try:
-            all_rules = _parse_egress_rules()
-        except ValueError as exc:
-            print(f"{RED}      >> CRITICAL: {exc}{NC}")
-            return False
-        v6_rules = [rule for rule in all_rules if ":" in rule.address]
-        if not _populate_egress_chain("ip6tables", v6_rules, description_prefix="IPv6"):
-            ok = False
+        egress_expected = _env_enabled("UKBGPT_EXPECT_EGRESS_BRIDGE")
+        include_egress = egress_expected or _egress_targets_configured()
+        if include_egress:
+            try:
+                all_rules = _parse_egress_rules()
+            except ValueError as exc:
+                print(f"{RED}      >> CRITICAL: {exc}{NC}")
+                return False
+            v6_rules = [rule for rule in all_rules if ":" in rule.address]
+            if not _populate_egress_chain("ip6tables", v6_rules, description_prefix="IPv6"):
+                ok = False
+        else:
+            print(
+                f"{YELLOW}      Interface present, but no egress airlock is enabled for this startup. "
+                f"Treating {EGRESS_NET} as stale/disabled.{NC}"
+            )
+            if not _flush_chain("ip6tables", EGRESS_CHAIN):
+                ok = False
     else:
         if not _flush_chain("ip6tables", EGRESS_CHAIN):
             ok = False

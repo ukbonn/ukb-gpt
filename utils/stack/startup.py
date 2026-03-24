@@ -1793,6 +1793,7 @@ def validate_environment(selection: SchemaRuntimeSelection | None = None) -> Sch
     additional_embedding_api = env_str("BATCH_CLIENT_MODE_ADDITIONAL_LOCAL_EMBEDDING_API_ADDRESS")
     os.environ["BATCH_CLIENT_MODE_ADDITIONAL_LOCAL_API_ENABLED"] = "false"
     os.environ["BATCH_CLIENT_MODE_ADDITIONAL_LOCAL_EMBEDDING_API_ENABLED"] = "false"
+    os.environ["UKBGPT_EXPECT_EGRESS_BRIDGE"] = "true" if (ldap_enabled or api_egress_enabled) else "false"
     os.environ.pop("UKBGPT_FIREWALL_EGRESS_RULES", None)
     resolved_certificate_key = _resolve_secret_input("CERTIFICATE_KEY")
     resolved_webui_secret_key = _resolve_secret_input("WEBUI_SECRET_KEY")

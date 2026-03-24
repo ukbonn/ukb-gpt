@@ -238,6 +238,8 @@ def _set_batch_api_egress_env(monkeypatch) -> None:
     monkeypatch.setenv("ENABLE_STT_BACKEND", "false")
     monkeypatch.delenv("EMBEDDING_MODEL_DEPLOYMENT_CONFIG", raising=False)
     monkeypatch.delenv("STT_MODEL_DEPLOYMENT_CONFIG", raising=False)
+
+
 def test_validate_environment_api_egress_toggle_true_requires_address(monkeypatch, capsys):
     _set_batch_api_egress_env(monkeypatch)
     monkeypatch.setenv("ENABLE_API_EGRESS", "true")

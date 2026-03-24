@@ -57,6 +57,36 @@ def test_parse_legacy_egress_rules_preserves_ldap_port(monkeypatch):
     ]
 
 
+def test_ipv4_rules_fail_closed_when_egress_expected_but_targets_missing(monkeypatch):
+    monkeypatch.setattr(firewall, "_ensure_chain", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(firewall, "_ensure_managed_chains", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(firewall, "_populate_internal_chain", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(firewall, "_populate_ingress_chain", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(firewall, "_wait_for_interface", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(firewall, "_parse_egress_rules", lambda: [])
+
+    populated: list[tuple[str, list[firewall.EgressRule], str]] = []
+    monkeypatch.setattr(
+        firewall,
+        "_populate_egress_chain",
+        lambda table_cmd, rules, *, description_prefix: populated.append((table_cmd, list(rules), description_prefix)) or True,
+    )
+    monkeypatch.setattr(
+        firewall,
+        "_install_jump_rules",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("should fail before jump installation")),
+    )
+
+    monkeypatch.setenv("UKBGPT_EXPECT_EGRESS_BRIDGE", "true")
+    monkeypatch.delenv("UKBGPT_FIREWALL_EGRESS_RULES", raising=False)
+    monkeypatch.delenv("EGRESS_TARGET_IPS", raising=False)
+    monkeypatch.delenv("EGRESS_TARGET_IP", raising=False)
+    monkeypatch.delenv("LDAP_TARGET_IP", raising=False)
+
+    assert firewall.enforce_ipv4_rules() is False
+    assert populated == [("iptables", [], "IPv4")]
+
+
 def test_populate_ingress_chain_without_ranges_is_default_deny(monkeypatch):
     appended: list[tuple[str, str, list[str], str]] = []
 

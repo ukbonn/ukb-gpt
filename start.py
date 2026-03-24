@@ -352,10 +352,13 @@ def _run_up_command(env_file: str | None = None):
     print("🔒 [Firewall] Applying Host-Level Isolation Rules (needs sudo)...")
     firewall_script = os.path.join(ROOT_DIR, "security_helpers", "apply_host_firewall.py")
     firewall_cmd = ["sudo", "env"]
+    expect_egress_bridge = env_str("UKBGPT_EXPECT_EGRESS_BRIDGE")
     firewall_egress_rules = env_str("UKBGPT_FIREWALL_EGRESS_RULES")
     egress_target_ips = env_str("EGRESS_TARGET_IPS")
     egress_target_ip = env_str("EGRESS_TARGET_IP") or env_str("LDAP_TARGET_IP")
     ldap_target_ip = env_str("LDAP_TARGET_IP")
+    if expect_egress_bridge:
+        firewall_cmd.append(f"UKBGPT_EXPECT_EGRESS_BRIDGE={expect_egress_bridge}")
     if firewall_egress_rules:
         firewall_cmd.append(f"UKBGPT_FIREWALL_EGRESS_RULES={firewall_egress_rules}")
     if egress_target_ips:

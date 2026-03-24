@@ -11,7 +11,7 @@ Read the [disclaimer](docs/disclaimer.md) and [security risk assessment](docs/ri
 
 ## Quick Start
 
-Set up the local Python environment once:
+Set up the local Python environment once. This creates `./.venv/bin/python` for the repository-specific interpreter:
 
 ```bash
 python3 -m venv .venv
