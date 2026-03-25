@@ -175,22 +175,6 @@ Optional model variables:
 - `VLLM_LLM_MAX_MODEL_LEN` (example: `131072`): Optional max model length override for this model family.
 - `VLLM_LLM_GPU_MEMORY_UTILIZATION` (example: `0.95`): Optional GPU memory utilization fraction override for this model family.
 
-#### Qwen Qwen3-1.7B
-
-General-purpose compact Qwen chat model family.
-
-- Model family ID: `model.llm.qwen_qwen3_1_7b`
-- Base template: `compose/models/llm/qwen--qwen3-1.7b/base.yml`
-- Accelerator: `nvidia`
-- GPU architecture presets: `default`
-- Default worker image: `vllm/vllm-openai:v0.14.0`
-
-Optional model variables:
-
-- `VLLM_OPENAI_IMAGE_LLM` (example: `vllm/vllm-openai:v0.14.0`): Worker image override for this LLM family.
-- `VLLM_LLM_MAX_MODEL_LEN` (example: `32768`): Optional max model length override for this model family.
-- `VLLM_LLM_GPU_MEMORY_UTILIZATION` (example: `0.90`): Optional GPU memory utilization fraction override for this model family.
-
 #### Qwen Qwen3.5-122B-A10B-FP8
 
 Large Qwen3.5 MoE FP8 family for standard multimodal serving with reasoning parser and MTP enabled.

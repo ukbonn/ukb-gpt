@@ -1,9 +1,12 @@
-## Implements the patch not yet merged in https://github.com/open-webui/open-webui/pull/22726
+## MAIN_NEW Implements the patch not yet merged in https://github.com/open-webui/open-webui/pull/22726
 ## and applies pipeline inlet filters to the OpenWebUI embeddings endpoint.
 ##
 ## This repo intentionally keeps the embeddings patch local. If upstream OpenWebUI
 ## changes and the patch no longer matches, warn loudly in build/start logs but do
 ## not fail the whole stack.
+## 
+## EMBEDDINGS_IMPORT_NEW: no PR yet
+## INLET_REQUEST_DATA_NEW: no PR yet
 
 from pathlib import Path
 
@@ -12,6 +15,26 @@ ROUTER_PATH = Path("/app/backend/open_webui/routers/pipelines.py")
 MAIN_PATH = Path("/app/backend/open_webui/main.py")
 ROUTER_OLD = '                    raise Exception(response.status, res["detail"])\n'
 ROUTER_NEW = '                    raise HTTPException(status_code=e.status, detail=res["detail"])\n'
+INLET_REQUEST_DATA_OLD = """            request_data = {
+                "user": user,
+                "body": payload,
+            }
+"""
+INLET_REQUEST_DATA_NEW = """            request_data = {
+                "user": user,
+                "body": payload,
+                "request": {
+                    "method": request.method,
+                    "path": request.url.path,
+                    "headers": {
+                        "user-agent": request.headers.get("user-agent", ""),
+                        "accept": request.headers.get("accept", ""),
+                        "origin": request.headers.get("origin", ""),
+                        "referer": request.headers.get("referer", ""),
+                    },
+                },
+            }
+"""
 EMBEDDINGS_IMPORT_OLD = "from open_webui.utils.embeddings import generate_embeddings\n"
 EMBEDDINGS_IMPORT_NEW = (
     "from open_webui.utils.embeddings import generate_embeddings\n"
@@ -156,6 +179,16 @@ def main() -> None:
             )
         else:
             _warn("Could not match pipeline HTTP error forwarding block in routers/pipelines.py")
+
+        router_text = ROUTER_PATH.read_text(encoding="utf-8")
+        if INLET_REQUEST_DATA_NEW not in router_text:
+            if INLET_REQUEST_DATA_OLD in router_text:
+                ROUTER_PATH.write_text(
+                    router_text.replace(INLET_REQUEST_DATA_OLD, INLET_REQUEST_DATA_NEW, 1),
+                    encoding="utf-8",
+                )
+            else:
+                _warn("Could not match pipeline inlet request forwarding block in routers/pipelines.py")
 
         main_text = MAIN_PATH.read_text(encoding="utf-8")
         main_changed = False

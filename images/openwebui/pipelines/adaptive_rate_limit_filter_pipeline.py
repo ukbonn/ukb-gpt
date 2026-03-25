@@ -141,12 +141,12 @@ class Pipeline:
         global_limit: bool = Field(default=True)
         enabled_for_admins: bool = Field(default=True)
         priority_whitelist: str = Field(
-            default="",
-            description="Comma-separated email or user-id allow-list for priority=0 injection.",
+            default="browser",
+            description="Comma-separated email, user-id, admins, or browser tokens that force priority=0.",
         )
         rate_limit_whitelist: str = Field(
             default="",
-            description="Comma-separated email or user-id allow-list exempt from rate limits.",
+            description="Comma-separated email, user-id, admins, or browser tokens exempt from rate limits.",
         )
 
         log_report_interval_seconds: int = Field(default=60, ge=10)
@@ -283,20 +283,30 @@ class Pipeline:
         self.holiday_objects.clear()
         self._debug("Rate limit valves updated.")
 
-    async def inlet(self, body: dict, user: Optional[dict] = None) -> dict:
+    async def inlet(
+        self,
+        body: dict,
+        user: Optional[dict] = None,
+        request: Optional[dict] = None,
+    ) -> dict:
         uid, ident, role, model_id = self._request_identity(user, body)
 
         if ident == "anonymous" and not self.valves.allow_anonymous_requests:
             self._raise_http_error(401, "Anonymous requests are not permitted.")
 
-        is_high_prio = self._check_whitelist(
-            ident, uid, role, self.valves.priority_whitelist
+        request_priority, priority_reason = self._resolve_request_priority(
+            ident, uid, role, request
         )
-        request_priority = 0 if is_high_prio else 1
+        self._debug(
+            f"Priority decision ident={ident} request_priority={request_priority} "
+            f"reason={priority_reason} user_agent={self._request_user_agent(request)!r}"
+        )
         if self.valves.inject_priority:
             body["priority"] = request_priority
 
-        if self._check_whitelist(ident, uid, role, self.valves.rate_limit_whitelist):
+        if self._check_whitelist(
+            ident, uid, role, self.valves.rate_limit_whitelist, request
+        ):
             self._debug(f"Bypassing rate limit for {ident} due to whitelist.")
             return body
 
@@ -344,17 +354,90 @@ class Pipeline:
     def _normalized_whitelist_items(self, raw_list: str) -> set[str]:
         return {item.strip().lower() for item in raw_list.split(",") if item.strip()}
 
+    def _request_headers(self, request: Optional[dict]) -> Dict[str, str]:
+        if not request or not isinstance(request, dict):
+            return {}
+
+        raw_headers = request.get("headers", {})
+        if isinstance(raw_headers, dict):
+            return {
+                str(key).lower(): "" if value is None else str(value)
+                for key, value in raw_headers.items()
+            }
+
+        normalized: Dict[str, str] = {}
+        if isinstance(raw_headers, list):
+            for entry in raw_headers:
+                if not isinstance(entry, (list, tuple)) or len(entry) != 2:
+                    continue
+                key, value = entry
+                key_text = (
+                    key.decode("utf-8", errors="ignore")
+                    if isinstance(key, bytes)
+                    else str(key)
+                )
+                value_text = (
+                    value.decode("utf-8", errors="ignore")
+                    if isinstance(value, bytes)
+                    else str(value)
+                )
+                normalized[key_text.lower()] = value_text
+        return normalized
+
+    def _request_user_agent(self, request: Optional[dict]) -> str:
+        return self._request_headers(request).get("user-agent", "")
+
+    def _is_browser_request(self, request: Optional[dict]) -> bool:
+        user_agent = self._request_user_agent(request).lower()
+        if not user_agent:
+            return False
+        browser_tokens = [
+            "firefox",
+            "chrome",
+            "safari",
+            "edg",
+            "opera",
+            "msie",
+            "trident",
+        ]
+        api_tokens = ["curl", "python-requests", "postman", "bot", "httpie"]
+        return any(token in user_agent for token in browser_tokens) and not any(
+            token in user_agent for token in api_tokens
+        )
+
     def _check_whitelist(
-        self, ident: str, uid: str, role: Optional[str], whitelist: str
+        self,
+        ident: str,
+        uid: str,
+        role: Optional[str],
+        whitelist: str,
+        request: Optional[dict] = None,
     ) -> bool:
         items = self._normalized_whitelist_items(whitelist)
         if not items:
             return False
         if role == "admin" and "admins" in items:
             return True
+        if "browser" in items and self._is_browser_request(request):
+            return True
         ident_lower = ident.lower()
         uid_lower = uid.lower()
         return ident_lower in items or uid_lower in items
+
+    def _resolve_request_priority(
+        self,
+        ident: str,
+        uid: str,
+        role: Optional[str],
+        request: Optional[dict],
+    ) -> Tuple[int, str]:
+        if self._check_whitelist(
+            ident, uid, role, self.valves.priority_whitelist, request
+        ):
+            return 0, "priority_whitelist"
+        if self._is_browser_request(request):
+            return 0, "browser_user_agent"
+        return 1, "api_default"
 
     def _raise_http_error(self, status_code: int, detail: Any) -> None:
         raise HTTPException(status_code=int(status_code), detail=detail)
@@ -389,45 +472,58 @@ class Pipeline:
     ) -> None:
         del model_key
         if self.valves.requests_per_minute is not None:
+            per_minute_limit = self.valves.requests_per_minute
             requests_last_minute = [
                 timestamp for timestamp in timestamps if now - timestamp < 60
             ]
-            if len(requests_last_minute) >= self.valves.requests_per_minute:
-                wait_seconds = int(max(1, 60 - (now - requests_last_minute[0])))
+            if per_minute_limit <= 0 or len(requests_last_minute) >= per_minute_limit:
+                wait_seconds = (
+                    int(max(1, 60 - (now - requests_last_minute[0])))
+                    if requests_last_minute
+                    else 60
+                )
                 self._record_block(ident, request_priority)
                 self._raise_http_error(
                     429,
-                    f"Limit {self.valves.requests_per_minute}/min exceeded. Wait {wait_seconds}s.",
+                    f"Limit {per_minute_limit}/min exceeded. Wait {wait_seconds}s.",
                 )
 
         if self.valves.requests_per_hour is not None:
+            per_hour_limit = self.valves.requests_per_hour
             requests_last_hour = [
                 timestamp for timestamp in timestamps if now - timestamp < 3600
             ]
-            if len(requests_last_hour) >= self.valves.requests_per_hour:
-                wait_seconds = int(max(1, 3600 - (now - requests_last_hour[0])))
+            if per_hour_limit <= 0 or len(requests_last_hour) >= per_hour_limit:
+                wait_seconds = (
+                    int(max(1, 3600 - (now - requests_last_hour[0])))
+                    if requests_last_hour
+                    else 3600
+                )
                 self._record_block(ident, request_priority)
                 self._raise_http_error(
                     429,
-                    f"Limit {self.valves.requests_per_hour}/hour exceeded. Wait {wait_seconds}s.",
+                    f"Limit {per_hour_limit}/hour exceeded. Wait {wait_seconds}s.",
                 )
 
         if (
             self.valves.sliding_window_limit is not None
             and self.valves.sliding_window_minutes is not None
         ):
+            sliding_window_limit = self.valves.sliding_window_limit
             window_seconds = max(1, self.valves.sliding_window_minutes) * 60
             requests_in_window = [
                 timestamp for timestamp in timestamps if now - timestamp < window_seconds
             ]
-            if len(requests_in_window) >= self.valves.sliding_window_limit:
-                wait_seconds = int(
-                    max(1, window_seconds - (now - requests_in_window[0]))
+            if sliding_window_limit <= 0 or len(requests_in_window) >= sliding_window_limit:
+                wait_seconds = (
+                    int(max(1, window_seconds - (now - requests_in_window[0])))
+                    if requests_in_window
+                    else window_seconds
                 )
                 self._record_block(ident, request_priority)
                 self._raise_http_error(
                     429,
-                    f"Limit {self.valves.sliding_window_limit}/{self.valves.sliding_window_minutes}m exceeded. Wait {wait_seconds}s.",
+                    f"Limit {sliding_window_limit}/{self.valves.sliding_window_minutes}m exceeded. Wait {wait_seconds}s.",
                 )
 
     def _enforce_adaptive_limit(

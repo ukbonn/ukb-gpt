@@ -10,4 +10,5 @@ start.log
 tests/logs/
 # runtime compose output and wizard-managed deployment configs
 compose/generated/
-examples/dev_shell/artifacts/
+examples/
+

@@ -218,9 +218,10 @@ def test_render_model_compose_qwen_single_gpu(tmp_path):
     worker = rendered["services"]["worker_0"]
     assert "backend_router" not in rendered["services"]
     assert worker["deploy"]["resources"]["reservations"]["devices"][0]["device_ids"] == ["0"]
+    assert "--scheduling-policy=priority" in worker["command"]
     assert "--tensor-parallel-size=1" in worker["command"]
     assert Path(worker["extends"]["file"]).resolve() == (
-        ROOT / "compose" / "models" / "llm" / "qwen--qwen3-1.7b" / "base.yml"
+        ROOT / "compose" / "models" / "llm" / "qwen--qwen3.5-0.8b" / "base.yml"
     )
 
 
@@ -293,6 +294,7 @@ def test_render_model_compose_gpt_oss_two_workers_chatbot_provider(tmp_path):
     rendered = model_deployment.render_model_compose(resolved, output_path=str(tmp_path / "model.llm.yml"))
     assert "backend_router" in rendered["services"]
     assert rendered["services"]["worker_0"]["environment"]["VLLM_ATTENTION_BACKEND"] == "TRITON_ATTN"
+    assert "--scheduling-policy=priority" in rendered["services"]["worker_0"]["command"]
     assert "--enable-expert-parallel" in rendered["services"]["worker_0"]["command"]
     assert "--tensor-parallel-size=2" in rendered["services"]["worker_0"]["command"]
     assert "--tensor-parallel-size=2" in rendered["services"]["worker_1"]["command"]

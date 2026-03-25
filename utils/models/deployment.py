@@ -1,5 +1,6 @@
 import json
 import os
+import shlex
 import shutil
 import subprocess
 from dataclasses import dataclass
@@ -23,6 +24,8 @@ _ALLOWED_ROLES = {"llm", "embedding", "stt"}
 _ALLOWED_GPU_ARCHITECTURES = {"auto", "default", "nvidia_ampere", "nvidia_hopper", "nvidia_blackwell"}
 _ALLOWED_ROUTER_MODES = {"auto", "enabled", "disabled"}
 REPO_ROOT = Path(__file__).resolve().parents[2]
+_SCHEDULING_POLICY_FLAG = "--scheduling-policy"
+_LLM_COMMAND_APPEND_ENV = "VLLM_LLM_COMMAND_APPEND"
 
 
 @dataclass(frozen=True)
@@ -480,6 +483,19 @@ def render_model_compose(
 
         command = list(runtime.command)
         command.extend(preset.command_append)
+        if resolved.role == "llm":
+            extra_command = os.getenv(_LLM_COMMAND_APPEND_ENV, "").strip()
+            if extra_command:
+                command.extend(shlex.split(extra_command))
+        if (
+            resolved.role == "llm"
+            and not any(
+                argument == _SCHEDULING_POLICY_FLAG
+                or argument.startswith(f"{_SCHEDULING_POLICY_FLAG}=")
+                for argument in command
+            )
+        ):
+            command.append(f"{_SCHEDULING_POLICY_FLAG}=priority")
         if resolved.family.accelerator == "nvidia" and worker.expert_parallel_enabled:
             command.append("--enable-expert-parallel")
         if resolved.family.accelerator == "nvidia":

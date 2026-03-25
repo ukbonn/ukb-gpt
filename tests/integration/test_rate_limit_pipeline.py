@@ -4,7 +4,7 @@ import pytest
 import requests
 import urllib3
 
-from tests.helpers.commands import retry_until
+from tests.helpers.commands import retry_until, run
 
 
 pytestmark = [pytest.mark.integration, pytest.mark.chatbot_provider]
@@ -12,6 +12,11 @@ pytestmark = [pytest.mark.integration, pytest.mark.chatbot_provider]
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 PIPELINE_ID = "adaptive_rate_limit_filter_pipeline"
+BROWSER_USER_AGENT = (
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
+)
+API_USER_AGENT = "curl/8.7.1"
 
 
 def _url(stack, path: str) -> str:
@@ -19,21 +24,34 @@ def _url(stack, path: str) -> str:
     return f"https://127.0.0.1:{stack.https_port}{path}"
 
 
-def _headers(stack, token: str | None = None) -> dict[str, str]:
+def _headers(
+    stack,
+    token: str | None = None,
+    extra_headers: dict[str, str] | None = None,
+) -> dict[str, str]:
     headers = {
         "Host": stack.server_name,
         "Connection": "close",
     }
     if token:
         headers["Authorization"] = f"Bearer {token}"
+    if extra_headers:
+        headers.update(extra_headers)
     return headers
 
 
-def _request(stack, method: str, path: str, token: str | None = None, **kwargs):
+def _request(
+    stack,
+    method: str,
+    path: str,
+    token: str | None = None,
+    extra_headers: dict[str, str] | None = None,
+    **kwargs,
+):
     return requests.request(
         method,
         _url(stack, path),
-        headers=_headers(stack, token),
+        headers=_headers(stack, token, extra_headers),
         timeout=10,
         verify=False,
         **kwargs,
@@ -174,18 +192,30 @@ def _get_model_id(stack, token: str) -> str:
     return _get_models(stack, token)[0]["id"]
 
 
-def _chat_completion(stack, token: str, model_id: str):
+def _chat_completion(
+    stack,
+    token: str,
+    model_id: str,
+    *,
+    extra_headers: dict[str, str] | None = None,
+):
     return _request(
         stack,
         "POST",
         "/api/chat/completions",
         token=token,
+        extra_headers=extra_headers,
         json={
             "model": model_id,
             "stream": False,
             "messages": [{"role": "user", "content": "Ping"}],
         },
     )
+
+
+def _container_logs(container_name: str) -> str:
+    result = run(["docker", "logs", container_name], shell=False)
+    return f"{result.stdout}{result.stderr}"
 
 
 def test_chatbot_provider_without_rate_limiting_uses_direct_backend(
@@ -328,6 +358,97 @@ def test_adaptive_rate_limit_pipeline_switches_between_static_and_adaptive_modes
         )
         assert second_adaptive.status_code == 429, second_adaptive.text
         assert "Limit 1/min exceeded" in second_adaptive.json().get("detail", "")
+    finally:
+        _update_pipeline_valves(
+            rate_limited_chatbot_provider_stack,
+            admin_token,
+            url_idx,
+            original_valves,
+        )
+
+
+def test_adaptive_rate_limit_pipeline_forwards_browser_request_metadata(
+    rate_limited_chatbot_provider_stack,
+):
+    admin_email = f"admin-{uuid.uuid4().hex[:8]}@example.com"
+    admin_password = "TestPassword123!"
+    _wait_for_frontend_https(rate_limited_chatbot_provider_stack)
+    admin = _create_or_login_admin(
+        rate_limited_chatbot_provider_stack, admin_email, admin_password
+    )
+    admin_token = admin["token"]
+
+    url_idx = _wait_for_pipelines_url_idx(
+        rate_limited_chatbot_provider_stack,
+        admin_token,
+    )
+    original_valves = _get_pipeline_valves(
+        rate_limited_chatbot_provider_stack,
+        admin_token,
+        url_idx,
+    )
+    model_id = _get_model_id(rate_limited_chatbot_provider_stack, admin_token)
+    browser_user = _add_user(
+        rate_limited_chatbot_provider_stack,
+        admin_token,
+        f"browser-{uuid.uuid4().hex[:8]}@example.com",
+        "TestPassword123!",
+    )
+    api_user = _add_user(
+        rate_limited_chatbot_provider_stack,
+        admin_token,
+        f"api-{uuid.uuid4().hex[:8]}@example.com",
+        "TestPassword123!",
+    )
+
+    try:
+        updated_valves = _update_pipeline_valves(
+            rate_limited_chatbot_provider_stack,
+            admin_token,
+            url_idx,
+            {
+                **original_valves,
+                "mode": "static",
+                "requests_per_minute": 10,
+                "requests_per_hour": 100,
+                "sliding_window_limit": 100,
+                "sliding_window_minutes": 15,
+                "priority_whitelist": "",
+                "rate_limit_whitelist": "",
+                "inject_priority": True,
+                "allow_anonymous_requests": False,
+                "enable_debug_logging": True,
+            },
+        )
+        assert updated_valves["inject_priority"] is True
+
+        browser_response = _chat_completion(
+            rate_limited_chatbot_provider_stack,
+            browser_user["token"],
+            model_id,
+            extra_headers={"User-Agent": BROWSER_USER_AGENT},
+        )
+        assert browser_response.status_code == 200, browser_response.text
+
+        api_response = _chat_completion(
+            rate_limited_chatbot_provider_stack,
+            api_user["token"],
+            model_id,
+            extra_headers={"User-Agent": API_USER_AGENT},
+        )
+        assert api_response.status_code == 200, api_response.text
+
+        expected_browser = (
+            f"Priority decision ident={browser_user['email']} request_priority=0"
+        )
+        expected_api = f"Priority decision ident={api_user['email']} request_priority=1"
+
+        assert retry_until(
+            lambda: expected_browser in _container_logs("ukbgpt_pipelines")
+            and expected_api in _container_logs("ukbgpt_pipelines"),
+            attempts=15,
+            delay_seconds=2,
+        ), _container_logs("ukbgpt_pipelines")
     finally:
         _update_pipeline_valves(
             rate_limited_chatbot_provider_stack,
