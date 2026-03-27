@@ -9,6 +9,15 @@ Read the [disclaimer](docs/disclaimer.md) and [security risk assessment](docs/ri
 
 **By cloning, forking, or running this software, you acknowledge that you have read this [disclaimer](docs/disclaimer.md) and agree to use the software at your own risk.**
 
+## Citation
+
+If you use this repository or its architecture in your research, please cite our paper:
+
+**Secure On-Premise Deployment of Open-Weights Large Language Models in Radiology: An Isolation-First Architecture with Prospective Pilot Evaluation**  
+Sebastian Nowak\*, Jann-Frederick Laß\*, Narine Mesropyan, Babak Salam, Nico Piel, Wolfgang Block, Alois Martin Sprinkart, Julian Alexander Luetkens, Benjamin Wulff\*, Alexander Isaak\*  
+*\* contributed equally*  
+arXiv preprint, 2026. *(arXiv ID coming soon)*
+
 ## Quick Start
 
 Set up the local Python environment once. This creates `./.venv/bin/python` for the repository-specific interpreter:
@@ -171,11 +180,4 @@ python3 stop.py
 
 Secrets can be exported in the shell or provided via `*_FILE` variables such as `CERTIFICATE_KEY_FILE`. Do not set both `VAR` and `VAR_FILE` for the same secret.
 
-## Citation
 
-If you use this repository or its architecture in your research, please cite our paper:
-
-**Secure On-Premise Deployment of Open-Weights Large Language Models in Radiology: An Isolation-First Architecture with Prospective Pilot Evaluation**  
-Sebastian Nowak\*, Jann-Frederick Laß\*, Narine Mesropyan, Babak Salam, Nico Piel, Wolfgang Block, Alois Martin Sprinkart, Julian Alexander Luetkens, Benjamin Wulff\*, Alexander Isaak\*  
-*\* contributed equally*  
-arXiv preprint, 2026. *(arXiv ID coming soon)*
