@@ -358,7 +358,7 @@ prompt = true
 type = "string"
 default = ""
 secret = false
-description = "Global fallback worker image for LLM, embedding, and STT backends."
+description = "Global fallback worker image for LLM, embedding, STT, and TTS backends."
 examples = ["vllm/vllm-openai:v0.14.0"]
 validators = []
 
@@ -384,6 +384,14 @@ default = ""
 secret = false
 description = "Worker image override for STT backend."
 examples = ["vllm/vllm-openai:nightly"]
+validators = []
+
+[vars.VLLM_OPENAI_IMAGE_TTS]
+type = "string"
+default = ""
+secret = false
+description = "Worker image override for TTS backend."
+examples = ["vllm/vllm-omni:v0.18.0"]
 validators = []
 
 [vars.VLLM_LLM_MAX_MODEL_LEN]
@@ -448,6 +456,14 @@ default = ""
 secret = false
 description = "Optional override for STT max model length."
 examples = ["131072"]
+validators = []
+
+[vars.VLLM_TTS_GPU_MEMORY_UTILIZATION]
+type = "string"
+default = ""
+secret = false
+description = "Optional override for TTS GPU memory utilization fraction."
+examples = ["0.80"]
 validators = []
 
 [vars.NGINX_BACKEND_ROUTER_IMAGE]
@@ -964,6 +980,22 @@ required_when_all = ["feature:stt_backend"]
 description = "Deployment config for STT workers (repo-relative or absolute path)."
 examples = ["examples/model_deployments/voxtral-mini-4b.single-gpu.toml"]
 
+[vars.TTS_MODEL_DEPLOYMENT_CONFIG]
+type = "string"
+default = ""
+secret = false
+description = "Model deployment config path for TTS workers (repo-relative or absolute)."
+examples = ["examples/model_deployments/voxtral-4b-tts.single-gpu.toml"]
+validators = []
+
+[[vars.TTS_MODEL_DEPLOYMENT_CONFIG.bindings]]
+overlay = "feature.tts_backend"
+prompt_order = 10
+prompt = true
+required_when_all = ["feature:tts_backend"]
+description = "Deployment config for TTS workers (repo-relative or absolute path)."
+examples = ["examples/model_deployments/voxtral-4b-tts.single-gpu.toml"]
+
 [vars.ENABLE_DICTATION_APP]
 type = "bool"
 default = "false"
@@ -995,6 +1027,68 @@ validators = []
 overlay = "app.dictation"
 prompt_order = 20
 prompt = true
+applicable_when_all = ["app:dictation"]
+
+[vars.TTS_MODEL_ID]
+type = "string"
+default = "mistralai/Voxtral-4B-TTS-2603"
+secret = false
+description = "Model id presented to dictation/TTS clients."
+examples = ["mistralai/Voxtral-4B-TTS-2603"]
+validators = []
+
+[[vars.TTS_MODEL_ID.bindings]]
+overlay = "feature.tts_backend"
+prompt_order = 20
+prompt = true
+applicable_when_all = ["feature:tts_backend"]
+
+[[vars.TTS_MODEL_ID.bindings]]
+overlay = "app.dictation"
+prompt_order = 30
+prompt = false
+applicable_when_all = ["app:dictation"]
+
+[vars.DICTATION_TTS_BASE_URL]
+type = "string"
+default = ""
+secret = false
+description = "Optional OpenAI-compatible TTS base URL override for dictation read-aloud."
+examples = ["http://tts_backend_router:5000/v1"]
+validators = []
+
+[[vars.DICTATION_TTS_BASE_URL.bindings]]
+overlay = "app.dictation"
+prompt_order = 40
+prompt = false
+applicable_when_all = ["app:dictation"]
+
+[vars.DICTATION_TTS_DEFAULT_VOICE]
+type = "string"
+default = "casual_male"
+secret = false
+description = "Default voice used by dictation translated-text read-aloud."
+examples = ["casual_male"]
+validators = []
+
+[[vars.DICTATION_TTS_DEFAULT_VOICE.bindings]]
+overlay = "app.dictation"
+prompt_order = 50
+prompt = false
+applicable_when_all = ["app:dictation"]
+
+[vars.DICTATION_TTS_RESPONSE_FORMAT]
+type = "string"
+default = "wav"
+secret = false
+description = "Default response format used by dictation translated-text read-aloud."
+examples = ["wav", "mp3"]
+validators = []
+
+[[vars.DICTATION_TTS_RESPONSE_FORMAT.bindings]]
+overlay = "app.dictation"
+prompt_order = 60
+prompt = false
 applicable_when_all = ["app:dictation"]
 
 [vars.ENABLE_DATASET_STRUCTURING_APP]
@@ -1174,7 +1268,7 @@ title = "Batch Client Mode"
 summary = "Localhost-only HTTP entrypoint for programmatic inference workloads."
 doc_path = "docs/modes/batch-client.md"
 availability_modes = ["batch_client"]
-compatible_features = ["api_egress", "metrics", "embedding_backend", "stt_backend"]
+compatible_features = ["api_egress", "metrics", "embedding_backend", "stt_backend", "tts_backend"]
 compatible_apps = ["dataset_structuring", "cohort_feasibility"]
 services = []
 use_when = [
@@ -1209,7 +1303,7 @@ title = "Chatbot Provider Mode"
 summary = "Interactive deployment with OpenWebUI and HTTPS ingress."
 doc_path = "docs/modes/chatbot-provider.md"
 availability_modes = ["chatbot_provider"]
-compatible_features = ["rate_limiting", "ldap", "metrics", "chat_purger", "embedding_backend", "stt_backend"]
+compatible_features = ["rate_limiting", "ldap", "metrics", "chat_purger", "embedding_backend", "stt_backend", "tts_backend"]
 compatible_apps = ["dictation"]
 services = ["frontend"]
 use_when = [
@@ -1477,6 +1571,37 @@ access = [
 ]
 
 [[overlays]]
+id = "feature.tts_backend"
+name = "tts_backend"
+kind = "feature"
+order = 46
+compose_file = "compose/features/tts_backend.yml"
+title = "TTS Backend"
+summary = "Dedicated TTS worker backend selected via TTS_MODEL_DEPLOYMENT_CONFIG."
+doc_path = "docs/features/tts-backend.md"
+availability_modes = ["chatbot_provider", "batch_client"]
+wizard_enabled = false
+services = []
+use_when = [
+  "text-to-speech generation should run on dedicated workers",
+  "dictation app should read translated text aloud through an internal TTS backend"
+]
+behavior = [
+  "setting TTS_MODEL_DEPLOYMENT_CONFIG enables the TTS backend",
+  "startup appends a runtime-generated TTS compose file when the deployment config is present",
+  "TTS remains internal-only and is not added to OpenWebUI OPENAI_API_BASE_URLS"
+]
+verify = [
+  "confirm startup output reports TTS backend enabled",
+  "inspect runtime discovery output for tts workers and TTS_ENDPOINT",
+  "issue a POST to /v1/audio/speech against the selected route"
+]
+access = [
+  "tts workers are internal-only on docker_internal",
+  "dictation translated-text read-aloud uses the dedicated TTS backend when configured"
+]
+
+[[overlays]]
 id = "app.cohort_feasibility"
 name = "cohort_feasibility"
 kind = "app"
@@ -1554,7 +1679,8 @@ use_when = [
 behavior = [
   "dictation is exposed only via ingress path /dictation/",
   "ENABLE_DICTATION_APP requires STT_MODEL_DEPLOYMENT_CONFIG",
-  "STT-only backend mode is supported only when dictation is enabled"
+  "STT-only backend mode is supported only when dictation is enabled",
+  "translated-text read-aloud uses DICTATION_TTS_BASE_URL or the dedicated TTS backend when configured"
 ]
 verify = [
   "confirm startup reports dictation enabled",

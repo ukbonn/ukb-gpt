@@ -20,7 +20,7 @@ from ..stack.schema import (
 )
 
 
-_ALLOWED_ROLES = {"llm", "embedding", "stt"}
+_ALLOWED_ROLES = {"llm", "embedding", "stt", "tts"}
 _ALLOWED_GPU_ARCHITECTURES = {"auto", "default", "nvidia_ampere", "nvidia_hopper", "nvidia_blackwell"}
 _ALLOWED_ROUTER_MODES = {"auto", "enabled", "disabled"}
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -691,6 +691,8 @@ def _worker_service_name(role: str, index: int) -> str:
         return f"embedding_worker_{index}"
     if role == "stt":
         return f"stt_worker_{index}"
+    if role == "tts":
+        return f"tts_worker_{index}"
     return f"worker_{index}"
 
 
@@ -699,6 +701,8 @@ def _container_name(role: str, index: int) -> str:
         return f"ukbgpt_embedding_worker_{index}"
     if role == "stt":
         return f"ukbgpt_stt_worker_{index}"
+    if role == "tts":
+        return f"ukbgpt_tts_worker_{index}"
     return f"ukbgpt_worker_{index}"
 
 
@@ -707,6 +711,8 @@ def _router_service_name(role: str) -> str:
         return "embedding_backend_router"
     if role == "stt":
         return "stt_backend_router"
+    if role == "tts":
+        return "tts_backend_router"
     return "backend_router"
 
 
@@ -715,6 +721,8 @@ def _router_container_name(role: str) -> str:
         return "ukbgpt_embedding_backend_router"
     if role == "stt":
         return "ukbgpt_stt_backend_router"
+    if role == "tts":
+        return "ukbgpt_tts_backend_router"
     return "ukbgpt_backend_router"
 
 

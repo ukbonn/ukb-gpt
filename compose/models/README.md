@@ -27,11 +27,15 @@ compose/models/
     mistralai--voxtral-mini-4b-realtime-2602/
       base.yml
       model.toml
+  tts/
+    mistralai--voxtral-4b-tts-2603/
+      base.yml
+      model.toml
 ```
 
 - `base.yml` is the committed static worker scaffold for one model family.
 - `model.toml` declares metadata, worker runtime defaults, optional model variables, and GPU architecture presets.
-- Deployment topology is provided separately via `MODEL_DEPLOYMENT_CONFIG`, `EMBEDDING_MODEL_DEPLOYMENT_CONFIG`, and `STT_MODEL_DEPLOYMENT_CONFIG`.
+- Deployment topology is provided separately via `MODEL_DEPLOYMENT_CONFIG`, `EMBEDDING_MODEL_DEPLOYMENT_CONFIG`, `STT_MODEL_DEPLOYMENT_CONFIG`, and `TTS_MODEL_DEPLOYMENT_CONFIG`.
 - `start.py` renders concrete compose overrides into `compose/generated/model.<role>.yml` at runtime.
 
 ## Deployment Configs
@@ -113,6 +117,13 @@ export STT_MODEL_DEPLOYMENT_CONFIG="examples/model_deployments/voxtral-mini-4b.s
 export STT_MODEL_ID="mistralai/Voxtral-Mini-4B-Realtime-2602"
 ```
 
+Optional TTS backend:
+
+```bash
+export TTS_MODEL_DEPLOYMENT_CONFIG="examples/model_deployments/voxtral-4b-tts.single-gpu.toml"
+export TTS_MODEL_ID="mistralai/Voxtral-4B-TTS-2603"
+```
+
 Embedding-only deployments are supported:
 
 ```bash
@@ -132,6 +143,7 @@ If you want to add or extend supported model families, start with:
 - `VLLM_OPENAI_IMAGE_LLM`
 - `VLLM_OPENAI_IMAGE_EMBEDDING`
 - `VLLM_OPENAI_IMAGE_STT`
+- `VLLM_OPENAI_IMAGE_TTS`
 - `VLLM_OPENAI_IMAGE` as the shared fallback
 
 Worker-image defaults are declared per model family in `compose/models/**/model.toml`.
@@ -260,4 +272,21 @@ Optional model variables:
 - `VLLM_STT_LD_PRELOAD` (example: `/usr/lib/x86_64-linux-gnu/libjemalloc.so.2`): Optional LD_PRELOAD override for STT workers.
 - `VLLM_STT_GPU_MEMORY_UTILIZATION` (example: `0.70`): Optional GPU memory utilization fraction override for STT workers.
 - `VLLM_STT_MAX_MODEL_LEN` (example: `131072`): Optional max model length override for STT workers.
+
+### TTS Families
+
+#### Mistral Voxtral-4B-TTS-2603
+
+Dedicated TTS backend family for read-aloud and speech synthesis workflows.
+
+- Model family ID: `model.tts.mistralai_voxtral_4b_tts_2603`
+- Base template: `compose/models/tts/mistralai--voxtral-4b-tts-2603/base.yml`
+- Accelerator: `nvidia`
+- GPU architecture presets: `default`
+- Default worker image: `vllm/vllm-omni:v0.18.0`
+
+Optional model variables:
+
+- `VLLM_OPENAI_IMAGE_TTS` (example: `vllm/vllm-omni:v0.18.0`): Worker image override for this TTS family.
+- `VLLM_TTS_GPU_MEMORY_UTILIZATION` (example: `0.80`): Optional GPU memory utilization fraction override for TTS workers.
 <!-- GENERATED_MODELS_END -->

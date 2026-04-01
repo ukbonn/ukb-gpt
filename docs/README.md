@@ -37,6 +37,7 @@ Features extend a chosen mode.
 | API egress | Batch mode should expose one or two pinned upstream corporate model APIs | [Batch API egress](./features/api-egress.md) |
 | Metrics | You want Prometheus/Grafana and optional localhost scrape tunnels | [Metrics](./features/metrics.md) |
 | Chat purger | You want automatic deletion of old OpenWebUI chat history | [Chat purger](./features/chat-purger.md) |
+| TTS backend | You want a dedicated internal text-to-speech backend for read-aloud or synthesis | [TTS backend](./features/tts-backend.md) |
 
 ## 4. Add Optional Apps
 
@@ -90,6 +91,7 @@ Typical paths:
 - Minimal chatbot deployment: [Common setup](./setup-basics.md) -> [Chatbot provider mode](./modes/chatbot-provider.md) -> [Lifecycle guide](./lifecycle.md)
 - Minimal batch deployment: [Common setup](./setup-basics.md) -> [Batch client mode](./modes/batch-client.md) -> [Lifecycle guide](./lifecycle.md)
 - Chatbot with identity and retention: add [LDAP integration](./features/ldap.md) and [Chat purger](./features/chat-purger.md)
+- Dictation with translated-text read-aloud: add [STT backend](./features/stt-backend.md), [TTS backend](./features/tts-backend.md), and [Dictation app](./apps/dictation.md)
 - Batch with upstream routing: add [Batch API egress](./features/api-egress.md)
 
 Generated mode, feature, and app pages are reference docs. Use this hub for onboarding and deployment flow.

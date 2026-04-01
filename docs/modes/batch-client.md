@@ -56,6 +56,7 @@ export BATCH_CLIENT_LISTEN_PORT="30000"
 - [Metrics](../features/metrics.md)
 - [Embedding Backend](../features/embedding-backend.md)
 - [STT Backend](../features/stt-backend.md)
+- [TTS Backend](../features/tts-backend.md)
 
 ## Compatible Apps
 

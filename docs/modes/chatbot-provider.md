@@ -67,6 +67,7 @@ export OPENWEBUI_DATA_DIR="/var/lib/ukbgpt/openwebui-data"
 - [Chat Purger](../features/chat-purger.md)
 - [Embedding Backend](../features/embedding-backend.md)
 - [STT Backend](../features/stt-backend.md)
+- [TTS Backend](../features/tts-backend.md)
 
 ## Compatible Apps
 

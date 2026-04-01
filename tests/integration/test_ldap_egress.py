@@ -25,6 +25,7 @@ def test_ldap_egress_paths(helper_chatbot_provider_stack):
             name.startswith("ukbgpt_worker_")
             or name.startswith("ukbgpt_embedding_worker_")
             or name.startswith("ukbgpt_stt_worker_")
+            or name.startswith("ukbgpt_tts_worker_")
         )
     ]
     assert workers, "No backend worker container found for LDAP egress isolation checks"

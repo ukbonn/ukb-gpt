@@ -24,6 +24,7 @@ Add one directory per model family:
 - `compose/models/llm/<slug>/`
 - `compose/models/embedding/<slug>/`
 - `compose/models/stt/<slug>/`
+- `compose/models/tts/<slug>/`
 
 Each family directory must contain:
 
@@ -73,10 +74,11 @@ Relevant files:
 1. Add `compose/models/<role>/<slug>/base.yml`.
 2. Add `compose/models/<role>/<slug>/model.toml`.
 3. Add an example deployment under `examples/model_deployments/`.
-4. Add new schema variables in [compose/schema.toml](../../compose/schema.toml) only if the family needs them.
-5. Add test fixtures under `tests/model_deployments/`.
-6. Extend [tests/isolation/test_model_deployment.py](../../tests/isolation/test_model_deployment.py) when behavior changes.
-7. Regenerate docs with `./.venv/bin/python utils/scripts/build_docs.py`.
+4. Add or update the corresponding deployment env variable (`MODEL_DEPLOYMENT_CONFIG`, `EMBEDDING_MODEL_DEPLOYMENT_CONFIG`, `STT_MODEL_DEPLOYMENT_CONFIG`, or `TTS_MODEL_DEPLOYMENT_CONFIG`) only when a new backend role is introduced.
+5. Add new schema variables in [compose/schema.toml](../../compose/schema.toml) only if the family needs them.
+6. Add test fixtures under `tests/model_deployments/`.
+7. Extend [tests/isolation/test_model_deployment.py](../../tests/isolation/test_model_deployment.py) when behavior changes.
+8. Regenerate docs with `./.venv/bin/python utils/scripts/build_docs.py`.
 
 Startup-facing deployment behavior changes should also be checked against:
 

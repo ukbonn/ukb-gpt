@@ -180,7 +180,7 @@ def test_resolve_model_deployment_rejects_unsupported_expert_parallel(tmp_path):
             'api_version = "ukbgpt/v1alpha1"',
             'kind = "model_deployment"',
             'role = "llm"',
-            'model_family = "model.llm.qwen_qwen3_1_7b"',
+            'model_family = "model.llm.qwen_qwen3_5_0_8b"',
             'gpu_architecture = "auto"',
             'router = "auto"',
             "",
@@ -227,7 +227,7 @@ def test_render_model_compose_qwen_single_gpu(tmp_path):
 
 def test_list_wizard_model_deployments_filters_to_matching_family(tmp_path):
     schema = _schema()
-    family = schema.model_families["model.llm.qwen_qwen3_1_7b"]
+    family = schema.model_families["model.llm.qwen_qwen3_5_0_8b"]
     managed_dir = model_deployment.wizard_model_deployment_dir(
         tmp_path,
         role="llm",
@@ -241,7 +241,7 @@ def test_list_wizard_model_deployments_filters_to_matching_family(tmp_path):
             'api_version = "ukbgpt/v1alpha1"',
             'kind = "model_deployment"',
             'role = "llm"',
-            'model_family = "model.llm.qwen_qwen3_1_7b"',
+            'model_family = "model.llm.qwen_qwen3_5_0_8b"',
             'gpu_architecture = "auto"',
             'router = "auto"',
             "",
@@ -272,7 +272,7 @@ def test_list_wizard_model_deployments_filters_to_matching_family(tmp_path):
     )
 
     assert [Path(option.path).name for option in discovered] == ["deployment-01.toml"]
-    assert discovered[0].env_value == "compose/generated/deployments/llm/qwen_qwen3_1_7b/deployment-01.toml"
+    assert discovered[0].env_value == "compose/generated/deployments/llm/qwen_qwen3_5_0_8b/deployment-01.toml"
 
 
 def test_render_model_compose_gpt_oss_two_workers_chatbot_provider(tmp_path):

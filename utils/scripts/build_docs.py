@@ -98,12 +98,12 @@ def _render_model_families_section(schema) -> str:
 
     context = SelectionContext(
         mode="chatbot_provider",
-        enabled_features=frozenset({"embedding_backend", "stt_backend"}),
+        enabled_features=frozenset({"embedding_backend", "stt_backend", "tts_backend"}),
         enabled_apps=frozenset(),
     )
     env_view: dict[str, str] = {}
-    role_titles = {"llm": "LLM", "embedding": "Embedding", "stt": "STT"}
-    for role in ("llm", "embedding", "stt"):
+    role_titles = {"llm": "LLM", "embedding": "Embedding", "stt": "STT", "tts": "TTS"}
+    for role in ("llm", "embedding", "stt", "tts"):
         families = schema.model_families_by_role(role, wizard_only=True)
         if not families:
             continue

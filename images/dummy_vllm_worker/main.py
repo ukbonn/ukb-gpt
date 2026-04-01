@@ -1,8 +1,10 @@
 import argparse
+import io
 import logging
 import sys
 import time
 import uuid
+import wave
 
 from flask import Flask, Response, jsonify, request
 
@@ -129,6 +131,25 @@ def audio_transcriptions():
     )
 
 
+def _silent_wav_bytes(duration_seconds: float = 0.25, sample_rate: int = 16000) -> bytes:
+    frame_count = max(1, int(duration_seconds * sample_rate))
+    pcm_frames = b"\x00\x00" * frame_count
+    buffer = io.BytesIO()
+    with wave.open(buffer, "wb") as wav_file:
+        wav_file.setnchannels(1)
+        wav_file.setsampwidth(2)
+        wav_file.setframerate(sample_rate)
+        wav_file.writeframes(pcm_frames)
+    return buffer.getvalue()
+
+
+def audio_speech():
+    response_format = ((request.get_json(silent=True) or {}).get("response_format") or "wav").strip().lower()
+    if response_format != "wav":
+        response_format = "wav"
+    return Response(_silent_wav_bytes(), mimetype="audio/wav")
+
+
 if not args.disable_v1:
     app.add_url_rule("/v1/models", "get_models_v1", get_models, methods=["GET"])
     app.add_url_rule("/v1/chat/completions", "chat_completions_v1", chat_completions, methods=["POST"])
@@ -137,6 +158,12 @@ if not args.disable_v1:
         "/v1/audio/transcriptions",
         "audio_transcriptions_v1",
         audio_transcriptions,
+        methods=["POST"],
+    )
+    app.add_url_rule(
+        "/v1/audio/speech",
+        "audio_speech_v1",
+        audio_speech,
         methods=["POST"],
     )
 
@@ -155,6 +182,18 @@ if args.openwebui_api_compat:
         "/api/v1/audio/transcriptions",
         "audio_transcriptions_api_v1",
         audio_transcriptions,
+        methods=["POST"],
+    )
+    app.add_url_rule(
+        "/api/audio/speech",
+        "audio_speech_api",
+        audio_speech,
+        methods=["POST"],
+    )
+    app.add_url_rule(
+        "/api/v1/audio/speech",
+        "audio_speech_api_v1",
+        audio_speech,
         methods=["POST"],
     )
 

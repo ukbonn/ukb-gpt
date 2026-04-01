@@ -309,6 +309,7 @@ def _run_up_command(env_file: str | None = None):
         startup_config.deployment_bundle.llm_compose_flags,
         startup_config.deployment_bundle.embedding_compose_flags,
         startup_config.deployment_bundle.stt_compose_flags,
+        startup_config.deployment_bundle.tts_compose_flags,
         startup_config.deployment_bundle.resolved_deployments,
     )
     runtime_services = discovery["runtime_services"]

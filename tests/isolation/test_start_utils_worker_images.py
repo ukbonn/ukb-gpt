@@ -12,6 +12,7 @@ _IMAGE_ENV_VARS = [
     "VLLM_OPENAI_IMAGE_LLM",
     "VLLM_OPENAI_IMAGE_EMBEDDING",
     "VLLM_OPENAI_IMAGE_STT",
+    "VLLM_OPENAI_IMAGE_TTS",
 ]
 
 
@@ -51,6 +52,7 @@ def test_validate_model_specific_requirements_gpt_oss_requires_encodings(monkeyp
         llm_deployment_config="tests/model_deployments/gpt-oss-2x2.toml",
         embedding_deployment_config="",
         stt_deployment_config="",
+        tts_deployment_config="",
         runtime_mode="chatbot_provider",
         root_dir=start_utils.ROOT_DIR,
     )
@@ -236,8 +238,10 @@ def _set_batch_api_egress_env(monkeypatch) -> None:
     monkeypatch.setenv("ENABLE_LDAP", "false")
     monkeypatch.setenv("ENABLE_EMBEDDING_BACKEND", "false")
     monkeypatch.setenv("ENABLE_STT_BACKEND", "false")
+    monkeypatch.setenv("ENABLE_TTS_BACKEND", "false")
     monkeypatch.delenv("EMBEDDING_MODEL_DEPLOYMENT_CONFIG", raising=False)
     monkeypatch.delenv("STT_MODEL_DEPLOYMENT_CONFIG", raising=False)
+    monkeypatch.delenv("TTS_MODEL_DEPLOYMENT_CONFIG", raising=False)
 
 
 def test_validate_environment_api_egress_toggle_true_requires_address(monkeypatch, capsys):

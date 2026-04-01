@@ -21,9 +21,11 @@ class DeploymentRuntimeBundle:
     llm_deployment_config: str
     embedding_deployment_config: str
     stt_deployment_config: str
+    tts_deployment_config: str
     llm_compose_flags: list[str]
     embedding_compose_flags: list[str]
     stt_compose_flags: list[str]
+    tts_compose_flags: list[str]
     resolved_deployments: tuple[ResolvedModelDeployment, ...]
 
 
@@ -70,6 +72,7 @@ def resolve_selected_model_deployments(
     llm_deployment_config: str,
     embedding_deployment_config: str,
     stt_deployment_config: str,
+    tts_deployment_config: str,
     *,
     runtime_mode: str,
     root_dir: str | Path,
@@ -81,6 +84,7 @@ def resolve_selected_model_deployments(
         ("llm", "MODEL_DEPLOYMENT_CONFIG", llm_deployment_config),
         ("embedding", "EMBEDDING_MODEL_DEPLOYMENT_CONFIG", embedding_deployment_config),
         ("stt", "STT_MODEL_DEPLOYMENT_CONFIG", stt_deployment_config),
+        ("tts", "TTS_MODEL_DEPLOYMENT_CONFIG", tts_deployment_config),
     ):
         if not config_path:
             continue
@@ -198,19 +202,30 @@ def prepare_model_deployments(
         "STT_MODEL_DEPLOYMENT_CONFIG",
         root_dir=root_dir,
     )
+    tts_deployment_config = resolve_optional_model_deployment_config(
+        "TTS_MODEL_DEPLOYMENT_CONFIG",
+        root_dir=root_dir,
+    )
 
     for label, config in (
         ("LLM", llm_deployment_config),
         ("Embedding", embedding_deployment_config),
         ("STT", stt_deployment_config),
+        ("TTS", tts_deployment_config),
     ):
         print(f"🧠 [Model] {label} configuration: {config or 'DISABLED'}")
 
-    if not llm_deployment_config and not embedding_deployment_config and not stt_deployment_config:
+    if (
+        not llm_deployment_config
+        and not embedding_deployment_config
+        and not stt_deployment_config
+        and not tts_deployment_config
+    ):
         print("❌ Error: No backend model deployment selected.")
         print(
             "   Action: set MODEL_DEPLOYMENT_CONFIG and/or "
-            "EMBEDDING_MODEL_DEPLOYMENT_CONFIG and/or STT_MODEL_DEPLOYMENT_CONFIG."
+            "EMBEDDING_MODEL_DEPLOYMENT_CONFIG and/or STT_MODEL_DEPLOYMENT_CONFIG "
+            "and/or TTS_MODEL_DEPLOYMENT_CONFIG."
         )
         sys.exit(1)
 
@@ -218,6 +233,7 @@ def prepare_model_deployments(
         llm_deployment_config=llm_deployment_config,
         embedding_deployment_config=embedding_deployment_config,
         stt_deployment_config=stt_deployment_config,
+        tts_deployment_config=tts_deployment_config,
         runtime_mode=runtime_mode,
         root_dir=root_dir,
     )
@@ -240,10 +256,12 @@ def prepare_model_deployments(
     llm_compose_flags: list[str] = []
     embedding_compose_flags: list[str] = []
     stt_compose_flags: list[str] = []
+    tts_compose_flags: list[str] = []
 
     llm_generated_compose = rendered_paths.get("llm", "")
     embedding_generated_compose = rendered_paths.get("embedding", "")
     stt_generated_compose = rendered_paths.get("stt", "")
+    tts_generated_compose = rendered_paths.get("tts", "")
 
     if llm_generated_compose:
         llm_compose_flags = ["-f", model_base_compose, "-f", llm_generated_compose]
@@ -257,14 +275,20 @@ def prepare_model_deployments(
         stt_compose_flags = ["-f", model_base_compose, "-f", stt_generated_compose]
         compose_args += ["-f", stt_generated_compose]
 
+    if tts_generated_compose:
+        tts_compose_flags = ["-f", model_base_compose, "-f", tts_generated_compose]
+        compose_args += ["-f", tts_generated_compose]
+
     return DeploymentRuntimeBundle(
         compose_args=compose_args,
         llm_deployment_config=llm_deployment_config,
         embedding_deployment_config=embedding_deployment_config,
         stt_deployment_config=stt_deployment_config,
+        tts_deployment_config=tts_deployment_config,
         llm_compose_flags=llm_compose_flags,
         embedding_compose_flags=embedding_compose_flags,
         stt_compose_flags=stt_compose_flags,
+        tts_compose_flags=tts_compose_flags,
         resolved_deployments=resolved_deployments,
     )
 
@@ -319,7 +343,7 @@ def _resolve_vllm_openai_image(
 
 
 def _deployment_label(role: str) -> str:
-    return {"llm": "LLM", "embedding": "Embedding", "stt": "STT"}.get(role, role)
+    return {"llm": "LLM", "embedding": "Embedding", "stt": "STT", "tts": "TTS"}.get(role, role)
 
 
 def _vllm_openai_image_var_for_role(role: str) -> str:
@@ -327,6 +351,7 @@ def _vllm_openai_image_var_for_role(role: str) -> str:
         "llm": "VLLM_OPENAI_IMAGE_LLM",
         "embedding": "VLLM_OPENAI_IMAGE_EMBEDDING",
         "stt": "VLLM_OPENAI_IMAGE_STT",
+        "tts": "VLLM_OPENAI_IMAGE_TTS",
     }.get(role, "VLLM_OPENAI_IMAGE")
 
 

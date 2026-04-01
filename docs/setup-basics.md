@@ -56,6 +56,7 @@ Backend selection is deployment-config driven:
 - `MODEL_DEPLOYMENT_CONFIG`
 - `EMBEDDING_MODEL_DEPLOYMENT_CONFIG`
 - `STT_MODEL_DEPLOYMENT_CONFIG`
+- `TTS_MODEL_DEPLOYMENT_CONFIG`
 
 Each variable accepts either:
 
@@ -68,12 +69,14 @@ Example:
 export MODEL_DEPLOYMENT_CONFIG="examples/model_deployments/gpt-oss-120b.2x2.toml"
 export EMBEDDING_MODEL_DEPLOYMENT_CONFIG="examples/model_deployments/gte-qwen2.single-gpu.toml"
 export STT_MODEL_DEPLOYMENT_CONFIG="examples/model_deployments/voxtral-mini-4b.single-gpu.toml"
+export TTS_MODEL_DEPLOYMENT_CONFIG="examples/model_deployments/voxtral-4b-tts.single-gpu.toml"
 ```
 
 Notes:
 
 - leave `MODEL_DEPLOYMENT_CONFIG` empty for embedding-only deployments
 - STT is normally additive; STT-only backend mode is intended for the dictation app
+- TTS can run as a dedicated batch-only backend or alongside dictation for translated-text read-aloud
 - model family metadata and deployment examples are documented in [compose/models/README.md](../compose/models/README.md)
 
 ## Worker Image Variables
@@ -83,6 +86,7 @@ Worker image resolution follows this order:
 - `VLLM_OPENAI_IMAGE_LLM`
 - `VLLM_OPENAI_IMAGE_EMBEDDING`
 - `VLLM_OPENAI_IMAGE_STT`
+- `VLLM_OPENAI_IMAGE_TTS`
 - `VLLM_OPENAI_IMAGE`
 
 Worker-image defaults are declared per selected model family in `compose/models/**/model.toml`.

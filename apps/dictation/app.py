@@ -4,6 +4,7 @@ import base64
 import json
 import os
 import re
+import tempfile
 import uuid
 import urllib.request
 import wave
@@ -44,6 +45,23 @@ else:
 DICTATION_TRANSLATION_MODEL = os.getenv("DICTATION_TRANSLATION_MODEL", "").strip()
 DICTATION_TRANSLATION_TIMEOUT_SECONDS = int(os.getenv("DICTATION_TRANSLATION_TIMEOUT_SECONDS", "120"))
 DICTATION_TRANSLATION_API_KEY = os.getenv("DICTATION_TRANSLATION_API_KEY", "")
+_raw_tts_url = os.getenv("DICTATION_TTS_BASE_URL", "").strip()
+if _raw_tts_url:
+    DICTATION_TTS_BASE_URL = _raw_tts_url.rstrip("/")
+else:
+    tts_endpoint = os.getenv("TTS_ENDPOINT", "").strip()
+    if tts_endpoint:
+        if "://" not in tts_endpoint:
+            tts_endpoint = f"http://{tts_endpoint}"
+        DICTATION_TTS_BASE_URL = tts_endpoint.rstrip("/")
+        if not DICTATION_TTS_BASE_URL.endswith("/v1"):
+            DICTATION_TTS_BASE_URL = f"{DICTATION_TTS_BASE_URL}/v1"
+    else:
+        DICTATION_TTS_BASE_URL = ""
+DICTATION_TTS_MODEL = os.getenv("DICTATION_TTS_MODEL", os.getenv("TTS_MODEL_ID", "")).strip()
+DICTATION_TTS_DEFAULT_VOICE = os.getenv("DICTATION_TTS_DEFAULT_VOICE", "casual_male").strip() or "casual_male"
+DICTATION_TTS_RESPONSE_FORMAT = os.getenv("DICTATION_TTS_RESPONSE_FORMAT", "wav").strip().lower() or "wav"
+DICTATION_TTS_TIMEOUT_SECONDS = int(os.getenv("DICTATION_TTS_TIMEOUT_SECONDS", "300"))
 _DEFAULT_TRANSLATION_PROMPT = """Translate the following text into {{TARGET_LANGAUGE}}.
 
 Keep the original meaning and formatting, unless formatting would block meaning.
@@ -314,10 +332,24 @@ def _translate_api_headers() -> dict:
     return headers
 
 
+def _tts_api_headers() -> dict:
+    return {
+        "Content-Type": "application/json",
+    }
+
+
 def _normalize_translation_base_url() -> str:
     if DICTATION_LLM_BASE_URL.endswith("/v1"):
         return DICTATION_LLM_BASE_URL
     return f"{DICTATION_LLM_BASE_URL.rstrip('/')}/v1"
+
+
+def _normalize_tts_base_url() -> str:
+    if not DICTATION_TTS_BASE_URL:
+        return ""
+    if DICTATION_TTS_BASE_URL.endswith("/v1"):
+        return DICTATION_TTS_BASE_URL
+    return f"{DICTATION_TTS_BASE_URL.rstrip('/')}/v1"
 
 
 def _load_translation_prompt() -> str:
@@ -359,6 +391,35 @@ def _resolve_translation_model() -> str:
         return data.strip()
 
     raise RuntimeError("Could not discover a model id from the LLM endpoint.")
+
+
+def _resolve_tts_model() -> str:
+    if DICTATION_TTS_MODEL:
+        return DICTATION_TTS_MODEL
+
+    if not DICTATION_TTS_BASE_URL:
+        raise RuntimeError("Read-aloud unavailable: no configured TTS endpoint.")
+
+    endpoint = f"{_normalize_tts_base_url()}/models"
+    request = urllib.request.Request(endpoint, method="GET", headers=_tts_api_headers())
+    with urllib.request.urlopen(request, timeout=DICTATION_TTS_TIMEOUT_SECONDS) as response:
+        models_payload = json.loads(response.read().decode("utf-8", errors="replace"))
+
+    if not isinstance(models_payload, dict):
+        raise RuntimeError("Failed to parse TTS model list payload.")
+
+    data = models_payload.get("data")
+    if isinstance(data, list):
+        for item in data:
+            if isinstance(item, dict):
+                model_id = item.get("id")
+                if isinstance(model_id, str) and model_id.strip():
+                    return model_id.strip()
+
+    if isinstance(data, str) and data.strip():
+        return data.strip()
+
+    raise RuntimeError("Could not discover a model id from the TTS endpoint.")
 
 
 def _stt_ws_base_url() -> str:
@@ -579,6 +640,71 @@ def _translate_text(text: str, target_language: str):
         yield f"Translation failed: {exc}"
 
 
+def _audio_extension_for_format(response_format: str) -> str:
+    normalized = (response_format or "wav").strip().lower()
+    return normalized if normalized else "wav"
+
+
+def _write_generated_audio(audio_bytes: bytes, response_format: str) -> str:
+    suffix = f".{_audio_extension_for_format(response_format)}"
+    with tempfile.NamedTemporaryFile(
+        prefix="dictation_tts_",
+        suffix=suffix,
+        dir="/tmp",
+        delete=False,
+    ) as handle:
+        handle.write(audio_bytes)
+        return handle.name
+
+
+def speak_translation(text: str, target_language: str) -> tuple[str, str | None]:
+    text = (text or "").strip()
+    target_language = (target_language or "").strip()
+
+    if not text:
+        return "Read-aloud unavailable: no translated text to speak.", None
+
+    if not DICTATION_TTS_BASE_URL:
+        return "Read-aloud unavailable: missing DICTATION_TTS_BASE_URL or TTS_ENDPOINT.", None
+
+    try:
+        model = _resolve_tts_model()
+        payload = {
+            "model": model,
+            "input": text,
+            "voice": DICTATION_TTS_DEFAULT_VOICE,
+            "response_format": DICTATION_TTS_RESPONSE_FORMAT,
+        }
+        if target_language:
+            payload["language"] = target_language
+
+        request = urllib.request.Request(
+            f"{_normalize_tts_base_url()}/audio/speech",
+            data=json.dumps(payload).encode("utf-8"),
+            method="POST",
+            headers=_tts_api_headers(),
+        )
+
+        with urllib.request.urlopen(request, timeout=DICTATION_TTS_TIMEOUT_SECONDS) as response:
+            audio_bytes = response.read()
+
+        if not audio_bytes:
+            return "Read-aloud failed: empty audio response from TTS backend.", None
+
+        if DICTATION_TTS_RESPONSE_FORMAT == "wav" and not audio_bytes.startswith(b"RIFF"):
+            return "Read-aloud failed: TTS backend did not return WAV audio.", None
+
+        audio_path = _write_generated_audio(audio_bytes, DICTATION_TTS_RESPONSE_FORMAT)
+        return f"Read-aloud complete using voice '{DICTATION_TTS_DEFAULT_VOICE}'.", audio_path
+    except HTTPError as exc:
+        details = exc.read().decode("utf-8", errors="replace") if exc.fp else ""
+        if details:
+            return f"Read-aloud failed: {exc} - {details[:300]}", None
+        return f"Read-aloud failed: {exc}", None
+    except (RuntimeError, URLError, OSError, ValueError) as exc:
+        return f"Read-aloud failed: {exc}", None
+
+
 def transcribe_and_translate(audio_path: str | None, target_language: str):
     if not audio_path:
         yield "Record or upload audio first.", ""
@@ -616,6 +742,16 @@ def retranslate(text: str, target_language: str):
         yield translated
 
 
+def transcribe_and_translate_for_ui(audio_path: str | None, target_language: str):
+    for transcript_text, translated_text in transcribe_and_translate(audio_path, target_language):
+        yield transcript_text, translated_text, "", None
+
+
+def retranslate_for_ui(text: str, target_language: str):
+    for translated_text in retranslate(text, target_language):
+        yield translated_text, "", None
+
+
 with gr.Blocks(title="UKB Dictation", analytics_enabled=False) as demo:
     gr.Markdown("## Secure Dictation")
     gr.Markdown("Internal speech-to-text UI routed only inside the UKB-GPT stack.")
@@ -638,24 +774,43 @@ with gr.Blocks(title="UKB Dictation", analytics_enabled=False) as demo:
         info="Leave empty to skip translation.",
     )
     translated = gr.Textbox(label="Translated text", lines=10, show_copy_button=True)
+    tts_status = gr.Textbox(
+        label="Read-aloud status",
+        lines=2,
+        interactive=False,
+    )
+    tts_audio = gr.Audio(
+        label="Translated text read-aloud",
+        type="filepath",
+        interactive=False,
+    )
 
     with gr.Row():
         transcribe_button = gr.Button("Transcribe", variant="primary")
         retranslate_button = gr.Button("Retranslate", variant="secondary")
-        gr.ClearButton([audio, transcript, target_language, translated])
+        speak_button = gr.Button("Speak translation", variant="secondary")
+        gr.ClearButton([audio, transcript, target_language, translated, tts_status, tts_audio])
 
     transcribe_button.click(
-        transcribe_and_translate,
+        transcribe_and_translate_for_ui,
         inputs=[audio, target_language],
-        outputs=[transcript, translated],
+        outputs=[transcript, translated, tts_status, tts_audio],
         api_name="transcribe",
         show_api=False,
     )
 
     retranslate_button.click(
-        retranslate,
+        retranslate_for_ui,
         inputs=[transcript, target_language],
-        outputs=[translated],
+        outputs=[translated, tts_status, tts_audio],
+    )
+
+    speak_button.click(
+        speak_translation,
+        inputs=[translated, target_language],
+        outputs=[tts_status, tts_audio],
+        api_name="speak_translation",
+        show_api=False,
     )
 
 

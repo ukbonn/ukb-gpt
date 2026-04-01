@@ -415,7 +415,7 @@ def _has_value(value: str | None) -> bool:
 
 
 def _model_role_label(role: str) -> str:
-    return {"llm": "LLM", "embedding": "Embedding", "stt": "STT"}.get(role, role)
+    return {"llm": "LLM", "embedding": "Embedding", "stt": "STT", "tts": "TTS"}.get(role, role)
 
 
 def _flatten_model_families(
@@ -910,6 +910,7 @@ def run_wizard(
         ("llm", "MODEL_DEPLOYMENT_CONFIG", True),
         ("embedding", "EMBEDDING_MODEL_DEPLOYMENT_CONFIG", True),
         ("stt", "STT_MODEL_DEPLOYMENT_CONFIG", True),
+        ("tts", "TTS_MODEL_DEPLOYMENT_CONFIG", True),
     ]
 
     _print_section(
@@ -986,10 +987,12 @@ def run_wizard(
         enabled_features.add("embedding_backend")
     if _has_value(values.get("STT_MODEL_DEPLOYMENT_CONFIG", "")):
         enabled_features.add("stt_backend")
+    if _has_value(values.get("TTS_MODEL_DEPLOYMENT_CONFIG", "")):
+        enabled_features.add("tts_backend")
 
     configured_model_vars = [var_name for _role, var_name, _allow_disable in model_roles]
     if not any(_has_value(values.get(var_name, "")) for var_name in configured_model_vars):
-        print("At least one backend model deployment must be selected (LLM, embedding, or STT).")
+        print("At least one backend model deployment must be selected (LLM, embedding, STT, or TTS).")
         return 1
 
     context = SelectionContext(
@@ -1241,6 +1244,13 @@ def _resolve_schema_runtime_selection() -> SchemaRuntimeSelection:
                 config_var="STT_MODEL_DEPLOYMENT_CONFIG",
             )
             os.environ["ENABLE_STT_BACKEND"] = "true" if enabled else "false"
+        elif feature_overlay.name == "tts_backend":
+            enabled = _resolve_backend_toggle_with_compat(
+                feature_title=feature_overlay.title,
+                toggle_var="ENABLE_TTS_BACKEND",
+                config_var="TTS_MODEL_DEPLOYMENT_CONFIG",
+            )
+            os.environ["ENABLE_TTS_BACKEND"] = "true" if enabled else "false"
         elif not feature_overlay.toggle_var:
             enabled_features[feature_overlay.name] = False
             continue
@@ -2397,6 +2407,7 @@ def assemble_compose_args(selection: SchemaRuntimeSelection | None = None) -> St
 
     enable_embedding_backend = bool(deployment_bundle.embedding_deployment_config)
     enable_stt_backend = bool(deployment_bundle.stt_deployment_config)
+    enable_tts_backend = bool(deployment_bundle.tts_deployment_config)
 
     # Feature and app flags
     enable_rate_limiting = selection.enabled_features.get("rate_limiting", False)
@@ -2412,6 +2423,10 @@ def assemble_compose_args(selection: SchemaRuntimeSelection | None = None) -> St
         print("🔹 [Feature] STT Backend: ENABLED")
     else:
         print("🔸 [Feature] STT Backend: DISABLED")
+    if enable_tts_backend:
+        print("🔹 [Feature] TTS Backend: ENABLED")
+    else:
+        print("🔸 [Feature] TTS Backend: DISABLED")
     if enable_rate_limiting:
         print("🔹 [Feature] Rate Limiting: ENABLED")
     else:
@@ -2610,7 +2625,7 @@ def _resolved_model_id_for_role(resolved_deployments, role: str) -> str:
         for argument in deployment.family.runtime.command:
             if argument.startswith("--model="):
                 return argument.split("=", 1)[1].strip()
-        if role == "stt":
+        if role in {"stt", "tts"}:
             for argument in deployment.family.runtime.command:
                 if not argument.startswith("--"):
                     return argument.strip()
@@ -2666,6 +2681,7 @@ def discover_backends(
     llm_compose_flags: list[str],
     embedding_compose_flags: list[str],
     stt_compose_flags: list[str],
+    tts_compose_flags: list[str],
     resolved_deployments=(),
 ) -> dict:
     """
@@ -2674,6 +2690,7 @@ def discover_backends(
     llm_services = _compose_services(llm_compose_flags)
     embedding_services = _compose_services(embedding_compose_flags)
     stt_services = _compose_services(stt_compose_flags)
+    tts_services = _compose_services(tts_compose_flags)
 
     llm = (
         _discover_backend(
@@ -2707,34 +2724,57 @@ def discover_backends(
         if stt_services
         else _empty_backend_discovery()
     )
+    tts = (
+        _discover_backend(
+            label="TTS",
+            services=tts_services,
+            worker_regex=r"^tts_worker_(\d+)$",
+            router_name="tts_backend_router",
+        )
+        if tts_services
+        else _empty_backend_discovery()
+    )
 
     if not llm["workers"] and not embedding["workers"]:
+        batch_mode = env_bool("BATCH_CLIENT_MODE_ON")
         dictation_enabled = env_bool("ENABLE_DICTATION_APP")
         if dictation_enabled and stt["workers"]:
-            print("ℹ️  [Discovery] STT-only backend mode enabled for dictation.")
+            if tts["workers"]:
+                print("ℹ️  [Discovery] STT/TTS-only backend mode enabled for dictation.")
+            else:
+                print("ℹ️  [Discovery] STT-only backend mode enabled for dictation.")
+            print("   LLM/embedding workers are disabled by configuration.")
+        elif batch_mode and tts["workers"]:
+            print("ℹ️  [Discovery] TTS-only backend mode enabled for batch usage.")
             print("   LLM/embedding workers are disabled by configuration.")
         else:
-            print("❌ Error: No LLM or embedding workers discovered.")
+            print("❌ Error: No LLM, embedding, or allowed fallback backend workers discovered.")
             if stt["workers"] and not dictation_enabled:
                 print("   STT-only mode is supported only when ENABLE_DICTATION_APP=true.")
+            if tts["workers"] and not batch_mode:
+                print("   TTS-only mode is supported only in batch client mode.")
             print(
                 "   Action: keep MODEL_DEPLOYMENT_CONFIG and/or "
                 "EMBEDDING_MODEL_DEPLOYMENT_CONFIG set."
             )
             print(
-                "   STT remains optional and is enabled via STT_MODEL_DEPLOYMENT_CONFIG."
+                "   STT and TTS remain optional and are enabled via "
+                "STT_MODEL_DEPLOYMENT_CONFIG and TTS_MODEL_DEPLOYMENT_CONFIG."
             )
             sys.exit(1)
 
     os.environ["LLM_BACKEND_NODES"] = llm["backend_nodes"]
     os.environ["EMBEDDING_BACKEND_NODES"] = embedding["backend_nodes"]
     os.environ["STT_BACKEND_NODES"] = stt["backend_nodes"]
+    os.environ["TTS_BACKEND_NODES"] = tts["backend_nodes"]
     os.environ["LLM_BYPASS_ROUTER"] = llm["bypass_router"]
     os.environ["EMBEDDING_BYPASS_ROUTER"] = embedding["bypass_router"]
     os.environ["STT_BYPASS_ROUTER"] = stt["bypass_router"]
+    os.environ["TTS_BYPASS_ROUTER"] = tts["bypass_router"]
     os.environ["LLM_ENDPOINT"] = llm["endpoint"]
     os.environ["EMBEDDING_ENDPOINT"] = embedding["endpoint"]
     os.environ["STT_ENDPOINT"] = stt["endpoint"]
+    os.environ["TTS_ENDPOINT"] = tts["endpoint"]
 
     # Backward compatibility for existing templates/features.
     fallback_nodes = llm["backend_nodes"] or embedding["backend_nodes"]
@@ -2745,6 +2785,10 @@ def discover_backends(
         fallback_nodes = stt["backend_nodes"]
         fallback_bypass = stt["bypass_router"]
         primary_endpoint = stt["endpoint"]
+    elif not primary_endpoint and env_bool("BATCH_CLIENT_MODE_ON") and tts["endpoint"]:
+        fallback_nodes = tts["backend_nodes"]
+        fallback_bypass = tts["bypass_router"]
+        primary_endpoint = tts["endpoint"]
     os.environ["BACKEND_NODES"] = fallback_nodes
     os.environ["BYPASS_ROUTER"] = fallback_bypass
     os.environ["VLLM_ENDPOINT"] = primary_endpoint
@@ -2808,6 +2852,19 @@ def discover_backends(
             f"{os.environ['AUDIO_STT_OPENAI_API_BASE_URL']} ({os.environ['AUDIO_STT_MODEL']})"
         )
 
+    if tts["endpoint"]:
+        tts_model_id = (
+            env_str("TTS_MODEL_ID")
+            or _resolved_model_id_for_role(resolved_deployments, "tts")
+            or "mistralai/Voxtral-4B-TTS-2603"
+        )
+        if not env_str("TTS_MODEL_ID"):
+            os.environ["TTS_MODEL_ID"] = tts_model_id
+        print(
+            "🔗 [Discovery] Internal TTS backend: "
+            f"http://{tts['endpoint']}/v1 ({tts_model_id})"
+        )
+
     runtime_services = []
     for service in (
         llm["router_services"]
@@ -2816,6 +2873,8 @@ def discover_backends(
         + embedding["workers"]
         + stt["router_services"]
         + stt["workers"]
+        + tts["router_services"]
+        + tts["workers"]
     ):
         if service not in runtime_services:
             runtime_services.append(service)
@@ -2825,4 +2884,5 @@ def discover_backends(
         "llm_workers": llm["workers"],
         "embedding_workers": embedding["workers"],
         "stt_workers": stt["workers"],
+        "tts_workers": tts["workers"],
     }

@@ -459,7 +459,7 @@ def _parse_model_family(
 
     if not family_id:
         raise ValueError(f"Missing model.id in {model_path}")
-    if role not in {"llm", "embedding", "stt"}:
+    if role not in {"llm", "embedding", "stt", "tts"}:
         raise ValueError(f"Invalid model.role '{role}' in {model_path}")
     if not title:
         raise ValueError(f"Missing model.title in {model_path}")

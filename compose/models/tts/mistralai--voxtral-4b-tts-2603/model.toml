@@ -1,0 +1,42 @@
+[model]
+id = "model.tts.mistralai_voxtral_4b_tts_2603"
+role = "tts"
+title = "Mistral Voxtral-4B-TTS-2603"
+summary = "Dedicated TTS backend family for read-aloud and speech synthesis workflows."
+base_compose_file = "compose/models/tts/mistralai--voxtral-4b-tts-2603/base.yml"
+base_service = "voxtral_tts_worker_template"
+order = 10
+wizard_enabled = true
+accelerator = "nvidia"
+supports_expert_parallel = false
+
+[runtime]
+command = [
+  "mistralai/Voxtral-4B-TTS-2603",
+  "--port=5000",
+  "--host=0.0.0.0",
+  "--gpu-memory-utilization=${VLLM_TTS_GPU_MEMORY_UTILIZATION:-0.80}",
+  "--stage-configs-path=/workspace/vllm-omni/vllm_omni/model_executor/stage_configs/voxtral_tts.yaml",
+  "--omni",
+  "--trust-remote-code",
+  "--enforce-eager",
+]
+default_vllm_openai_image = "vllm/vllm-omni:v0.18.0"
+build_args = { VLLM_OPENAI_IMAGE = "${VLLM_OPENAI_IMAGE_TTS:-${VLLM_OPENAI_IMAGE:-vllm/vllm-omni:v0.18.0}}" }
+shm_size = "16gb"
+
+[architectures.default]
+
+[[variables]]
+id = "VLLM_OPENAI_IMAGE_TTS"
+prompt_order = 10
+prompt = true
+description = "Worker image override for this TTS family."
+examples = ["vllm/vllm-omni:v0.18.0"]
+
+[[variables]]
+id = "VLLM_TTS_GPU_MEMORY_UTILIZATION"
+prompt_order = 20
+prompt = true
+description = "Optional GPU memory utilization fraction override for TTS workers."
+examples = ["0.80"]

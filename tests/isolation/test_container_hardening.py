@@ -25,9 +25,11 @@ def _backend_like_containers() -> list[str]:
             name.startswith("ukbgpt_worker_")
             or name.startswith("ukbgpt_embedding_worker_")
             or name.startswith("ukbgpt_stt_worker_")
+            or name.startswith("ukbgpt_tts_worker_")
             or name == "ukbgpt_backend_router"
             or name == "ukbgpt_embedding_backend_router"
             or name == "ukbgpt_stt_backend_router"
+            or name == "ukbgpt_tts_backend_router"
         )
     )
 

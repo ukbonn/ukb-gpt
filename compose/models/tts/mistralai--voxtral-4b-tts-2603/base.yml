@@ -1,0 +1,13 @@
+services:
+  voxtral_tts_worker_template:
+    extends:
+      file: ../../../model.base.yml
+      service: base_worker_template
+    image: "ukbgpt-tts-worker-voxtral:local"
+    build:
+      context: ../../../..
+      dockerfile: images/vllm_worker/Dockerfile
+    entrypoint:
+      - /usr/local/bin/active_isolation_monitoring_entrypoint.sh
+      - vllm
+      - serve

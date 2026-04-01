@@ -13,6 +13,11 @@ services:
     environment:
       - "DICTATION_STT_BASE_URL=http://${STT_ENDPOINT:?Error: STT endpoint discovery failed; enable STT_MODEL_DEPLOYMENT_CONFIG}/v1"
       - "DICTATION_STT_MODEL=${STT_MODEL_ID:-mistralai/Voxtral-Mini-4B-Realtime-2602}"
+      - "DICTATION_TTS_BASE_URL=${DICTATION_TTS_BASE_URL:-}"
+      - "TTS_ENDPOINT=${TTS_ENDPOINT:-}"
+      - "TTS_MODEL_ID=${TTS_MODEL_ID:-mistralai/Voxtral-4B-TTS-2603}"
+      - "DICTATION_TTS_DEFAULT_VOICE=${DICTATION_TTS_DEFAULT_VOICE:-casual_male}"
+      - "DICTATION_TTS_RESPONSE_FORMAT=${DICTATION_TTS_RESPONSE_FORMAT:-wav}"
       - "DICTATION_ROOT_PATH=/dictation"
       - "DICTATION_PORT=7860"
       - "DICTATION_POSTPROC_CONFIG_PATH=/app/dictation_postprocessing.json"
