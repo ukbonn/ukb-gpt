@@ -7,6 +7,7 @@ import uuid
 import wave
 
 from flask import Flask, Response, jsonify, request
+from werkzeug.serving import WSGIRequestHandler
 
 logging.basicConfig(level=logging.DEBUG, stream=sys.stdout)
 logger = logging.getLogger(__name__)
@@ -35,6 +36,24 @@ args, unknown = parser.parse_known_args()
 app = Flask(__name__)
 # vLLM usually uses the --model argument for the ID
 MODEL_ID = args.model
+
+
+class _InternalDockerHostRequestHandler(WSGIRequestHandler):
+    """Normalize Docker service hosts that Werkzeug 3.2 rejects for tests.
+
+    Compose service names like ``worker_0`` are valid inside Docker DNS but the
+    dev server's Host validation rejects underscores before Flask can route the
+    request. The dummy worker is test-only, so normalizing the Host header keeps
+    the mock compatible with OpenWebUI's internal calls without changing the
+    production stack.
+    """
+
+    def make_environ(self):
+        environ = super().make_environ()
+        host = environ.get("HTTP_HOST", "")
+        if "_" in host:
+            environ["HTTP_HOST"] = host.replace("_", "-")
+        return environ
 
 
 @app.route("/health", methods=["GET"])
@@ -215,4 +234,9 @@ vllm:gpu_cache_usage_perc{{model_name=\"{MODEL_ID}\"}} 0.0
 
 
 if __name__ == "__main__":
-    app.run(host=args.host, port=args.port, threaded=True)
+    app.run(
+        host=args.host,
+        port=args.port,
+        threaded=True,
+        request_handler=_InternalDockerHostRequestHandler,
+    )

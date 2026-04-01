@@ -12,6 +12,8 @@ pytestmark = [pytest.mark.integration, pytest.mark.chatbot_provider]
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 PIPELINE_ID = "adaptive_rate_limit_filter_pipeline"
+PIPELINE_ADMIN_EMAIL = "pipeline-admin@example.com"
+PIPELINE_ADMIN_PASSWORD = "TestPassword123!"
 BROWSER_USER_AGENT = (
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
@@ -88,7 +90,10 @@ def _create_or_login_admin(stack, email: str, password: str) -> dict:
         "/api/v1/auths/signin",
         json={"email": email, "password": password},
     )
-    assert signin.status_code == 200, signin.text
+    assert signin.status_code == 200, (
+        f"signup={signup.status_code} {signup.text}\n"
+        f"signin={signin.status_code} {signin.text}"
+    )
     return signin.json()
 
 
@@ -221,11 +226,9 @@ def _container_logs(container_name: str) -> str:
 def test_chatbot_provider_without_rate_limiting_uses_direct_backend(
     chatbot_provider_stack,
 ):
-    admin_email = f"admin-{uuid.uuid4().hex[:8]}@example.com"
-    admin_password = "TestPassword123!"
     _wait_for_frontend_https(chatbot_provider_stack)
     admin = _create_or_login_admin(
-        chatbot_provider_stack, admin_email, admin_password
+        chatbot_provider_stack, PIPELINE_ADMIN_EMAIL, PIPELINE_ADMIN_PASSWORD
     )
     admin_token = admin["token"]
 
@@ -249,11 +252,9 @@ def test_chatbot_provider_without_rate_limiting_uses_direct_backend(
 def test_adaptive_rate_limit_pipeline_switches_between_static_and_adaptive_modes(
     rate_limited_chatbot_provider_stack,
 ):
-    admin_email = f"admin-{uuid.uuid4().hex[:8]}@example.com"
-    admin_password = "TestPassword123!"
     _wait_for_frontend_https(rate_limited_chatbot_provider_stack)
     admin = _create_or_login_admin(
-        rate_limited_chatbot_provider_stack, admin_email, admin_password
+        rate_limited_chatbot_provider_stack, PIPELINE_ADMIN_EMAIL, PIPELINE_ADMIN_PASSWORD
     )
     admin_token = admin["token"]
 
@@ -370,11 +371,9 @@ def test_adaptive_rate_limit_pipeline_switches_between_static_and_adaptive_modes
 def test_adaptive_rate_limit_pipeline_forwards_browser_request_metadata(
     rate_limited_chatbot_provider_stack,
 ):
-    admin_email = f"admin-{uuid.uuid4().hex[:8]}@example.com"
-    admin_password = "TestPassword123!"
     _wait_for_frontend_https(rate_limited_chatbot_provider_stack)
     admin = _create_or_login_admin(
-        rate_limited_chatbot_provider_stack, admin_email, admin_password
+        rate_limited_chatbot_provider_stack, PIPELINE_ADMIN_EMAIL, PIPELINE_ADMIN_PASSWORD
     )
     admin_token = admin["token"]
 
