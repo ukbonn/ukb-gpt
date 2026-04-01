@@ -88,7 +88,7 @@ def test_missing_model_toml_fails_strict_parse(tmp_path):
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(path.read_bytes())
 
-    target_toml = dst_root / "compose" / "models" / "llm" / "qwen--qwen3-1.7b" / "model.toml"
+    target_toml = dst_root / "compose" / "models" / "llm" / "qwen--qwen3.5-0.8b" / "model.toml"
     target_toml.unlink()
 
     with pytest.raises(ValueError, match="Missing TOML sibling for model base compose file"):
@@ -106,7 +106,7 @@ def test_unknown_catalog_reference_in_model_family_fails_strict_parse(tmp_path):
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(path.read_bytes())
 
-    model_toml = dst_root / "compose" / "models" / "llm" / "qwen--qwen3-1.7b" / "model.toml"
+    model_toml = dst_root / "compose" / "models" / "llm" / "qwen--qwen3.5-0.8b" / "model.toml"
     broken = model_toml.read_text(encoding="utf-8")
     broken += "\n[[variables]]\nid = \"DOES_NOT_EXIST\"\n"
     model_toml.write_text(broken, encoding="utf-8")
@@ -126,7 +126,7 @@ def test_invalid_model_architecture_fails_strict_parse(tmp_path):
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(path.read_bytes())
 
-    model_toml = dst_root / "compose" / "models" / "llm" / "qwen--qwen3-1.7b" / "model.toml"
+    model_toml = dst_root / "compose" / "models" / "llm" / "qwen--qwen3.5-0.8b" / "model.toml"
     broken = model_toml.read_text(encoding="utf-8")
     broken += "\n[architectures.invalid_gpu]\n"
     model_toml.write_text(broken, encoding="utf-8")
@@ -146,7 +146,7 @@ def test_missing_model_runtime_table_fails_strict_parse(tmp_path):
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(path.read_bytes())
 
-    model_toml = dst_root / "compose" / "models" / "llm" / "qwen--qwen3-1.7b" / "model.toml"
+    model_toml = dst_root / "compose" / "models" / "llm" / "qwen--qwen3.5-0.8b" / "model.toml"
     broken = model_toml.read_text(encoding="utf-8").replace("\n[runtime]\n", "\n[runtime_removed]\n", 1)
     model_toml.write_text(broken, encoding="utf-8")
 
@@ -166,7 +166,7 @@ def test_duplicate_model_family_id_fails_strict_parse(tmp_path):
             target.write_bytes(path.read_bytes())
 
     target_model_toml = dst_root / "compose" / "models" / "embedding" / "alibaba-nlp--gte-qwen2-1.5b-instruct" / "model.toml"
-    source_id = 'id = "model.llm.qwen_qwen3_1_7b"'
+    source_id = 'id = "model.llm.qwen_qwen3_5_0_8b"'
     target_text = target_model_toml.read_text(encoding="utf-8")
     target_text = target_text.replace(
         'id = "model.embedding.alibaba_nlp_gte_qwen2_1_5b"',

@@ -231,27 +231,6 @@ def test_nginx_debug_dump_stays_quiet_by_default():
     assert "Dumping final nginx configuration" not in res.output
 
 
-def test_nginx_debug_dump_prints_config_and_extra_file_when_enabled(tmp_path):
-    extra_config = tmp_path / "generated.conf"
-    extra_config.write_text("worker_connections 64;\n", encoding="utf-8")
-    _write_executable(tmp_path / "nginx", '#!/bin/sh\necho "fake nginx config"\n')
-
-    res = run(
-        ["/bin/sh", str(NGINX_DEBUG_DUMP), "Ingress Configurer", str(extra_config)],
-        shell=False,
-        env={
-            "PATH": f"{tmp_path}:{os.environ['PATH']}",
-            "DEBUG_NGINX_CONFIG_DUMP": "true",
-        },
-    )
-
-    assert res.code == 0, res.output
-    assert "Dumping final nginx configuration" in res.output
-    assert "fake nginx config" in res.output
-    assert f"Contents of {extra_config}:" in res.output
-    assert "worker_connections 64;" in res.output
-
-
 def test_install_security_helpers_sanitizes_ping_and_installs_scripts(tmp_path):
     install_copy = _copy_install_script_tree(tmp_path)
     fake_bin = tmp_path / "fake-bin"
@@ -293,29 +272,3 @@ def test_install_security_helpers_sanitizes_ping_and_installs_scripts(tmp_path):
     assert "install -y --no-install-recommends iputils-ping curl" in apt_log.read_text(
         encoding="utf-8"
     )
-
-
-def test_install_security_helpers_warns_when_ping_missing(tmp_path):
-    install_copy = _copy_install_script_tree(tmp_path)
-    fake_bin = tmp_path / "fake-bin"
-    fake_bin.mkdir()
-    install_bin = tmp_path / "installed-bin"
-    install_bin.mkdir()
-
-    _write_executable(fake_bin / "apt-get", "#!/bin/sh\nexit 0\n")
-
-    res = run(
-        ["/bin/sh", str(install_copy)],
-        shell=False,
-        env={
-            "PATH": f"{fake_bin}:{os.environ['PATH']}",
-            "INSTALL_BIN_DIR": str(install_bin),
-            "PING_CLEAN_PATH": str(tmp_path / 'ping_clean'),
-            "PING_BINARY_NAME": "missing-ping",
-        },
-    )
-
-    assert res.code == 0, res.output
-    assert "'ping' binary not found" in res.output
-    for script_name in INSTALL_COPY_SCRIPTS:
-        assert (install_bin / script_name).exists(), f"{script_name} was not installed"

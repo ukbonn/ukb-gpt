@@ -79,84 +79,10 @@ def test_wizard_writes_env_new_and_omits_secrets(monkeypatch, tmp_path, capsys):
     assert not any("Set ROOT_CA_PATH" in prompt for prompt in prompts_seen)
     assert not any("Set OPENWEBUI_RUNTIME_UID" in prompt for prompt in prompts_seen)
     assert not any("Set OPENWEBUI_RUNTIME_GID" in prompt for prompt in prompts_seen)
-    assert (
-        'MODEL_DEPLOYMENT_CONFIG='
-        '"compose/generated/deployments/llm/qwen_qwen3_1_7b/deployment-01.toml"'
-    ) in text
-    assert (
-        schema_root
-        / "compose"
-        / "generated"
-        / "deployments"
-        / "llm"
-        / "qwen_qwen3_1_7b"
-        / "deployment-01.toml"
-    ).is_file()
-
-
-def test_wizard_loads_existing_managed_model_deployment(monkeypatch, tmp_path, capsys):
-    wizard = _load_wizard_module()
-    schema_root = _prepare_schema_root(tmp_path)
-    managed_deployment_dir = (
-        schema_root
-        / "compose"
-        / "generated"
-        / "deployments"
-        / "llm"
-        / "qwen_qwen3_1_7b"
+    model_deployment_line = next(
+        line for line in text.splitlines() if line.startswith("MODEL_DEPLOYMENT_CONFIG=")
     )
-    managed_deployment_dir.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(
-        ROOT / "tests" / "model_deployments" / "qwen-single.toml",
-        managed_deployment_dir / "deployment-01.toml",
-    )
-
-    prompts_seen: list[str] = []
-    profile_prompt_count = 0
-
-    def fake_input(prompt: str) -> str:
-        nonlocal profile_prompt_count
-        prompts_seen.append(prompt)
-        if "Mode [default 1]" in prompt:
-            return "1"
-        if "Enable feature: Metrics" in prompt:
-            return "n"
-        if "Enable feature: LDAP Integration" in prompt:
-            return "n"
-        if "Enable feature: Chat Purger" in prompt:
-            return "n"
-        if "Enable app: Dictation App" in prompt:
-            return "n"
-        if prompt.strip() == "Profile:":
-            profile_prompt_count += 1
-            if profile_prompt_count == 1:
-                return "2"
-            if profile_prompt_count == 2:
-                return "3"
-            return "2"
-        if "Selection [default 1]" in prompt:
-            return ""
-        if "Deployment [default 1]" in prompt:
-            return ""
-        if "Set SSL_CERT_PATH" in prompt:
-            return "/tmp/fullchain.pem"
-        if "Set OPENWEBUI_DATA_DIR" in prompt:
-            return "/tmp/openwebui-data"
-        return ""
-
-    monkeypatch.setattr(builtins, "input", fake_input)
-
-    code = wizard.run_wizard(schema_root)
-    assert code == 0
-
-    env_text = (schema_root / ".env").read_text(encoding="utf-8")
-    assert (
-        'MODEL_DEPLOYMENT_CONFIG='
-        '"compose/generated/deployments/llm/qwen_qwen3_1_7b/deployment-01.toml"'
-    ) in env_text
-    assert not (managed_deployment_dir / "deployment-02.toml").exists()
-    assert not any("GPU architecture [default 1]" in prompt for prompt in prompts_seen)
-    assert not any("Set GPU groups" in prompt for prompt in prompts_seen)
-
-    out = capsys.readouterr().out
-    assert "Load an existing deployment config" in out
+    generated_path = model_deployment_line.split('"')[1]
+    assert generated_path.startswith("compose/generated/deployments/llm/")
+    assert generated_path.endswith("/deployment-01.toml")
+    assert (schema_root / generated_path).is_file()

@@ -13,7 +13,6 @@ import pytest
 import urllib3
 
 from tests.helpers.commands import assert_ok, run
-from tests.helpers.cohort_feasibility_db import create_sample_feasibility_dataset_root
 from tests.helpers.docker import (
     compose,
     compose_flags,
@@ -67,13 +66,6 @@ BATCH_CLIENT_COMPOSE_FILES = (
     REPO_ROOT / "compose/features/dmz_egress.yml",
     REPO_ROOT / "compose/features/api_egress.yml",
 )
-BATCH_CLIENT_FEASIBILITY_COMPOSE_FILES = (
-    REPO_ROOT / "compose/base.yml",
-    REPO_ROOT / "compose/modes/batch.client.yml",
-    REPO_ROOT / "compose/features/dmz_egress.yml",
-    REPO_ROOT / "compose/features/api_egress.yml",
-    REPO_ROOT / "compose/apps/cohort_feasibility.yml",
-)
 MOCK_LDAP_COMPOSE_FLAGS = compose_flags(TESTS_ROOT / "compose.test.mock_ldap_server.yml")
 MOCK_API_COMPOSE_FLAGS = compose_flags(TESTS_ROOT / "compose.test.mock_api_server.yml")
 
@@ -107,10 +99,6 @@ def _https_monitor_helper_chatbot_provider_compose_flags(
 
 def _batch_client_compose_flags(env: Optional[Dict[str, str]] = None) -> list[str]:
     return _compose_flags_for_model_stack(BATCH_CLIENT_COMPOSE_FILES, env=env)
-
-
-def _batch_client_feasibility_compose_flags(env: Optional[Dict[str, str]] = None) -> list[str]:
-    return _compose_flags_for_model_stack(BATCH_CLIENT_FEASIBILITY_COMPOSE_FILES, env=env)
 
 
 @dataclass(frozen=True)
@@ -909,118 +897,6 @@ def _launch_batch_client_stack(tmp_path_factory) -> ManagedStackInstance:
         raise
 
 
-def _launch_batch_client_feasibility_stack(tmp_path_factory) -> ManagedStackInstance:
-    artifacts_dir, env, log_dir = _prepare_stack_environment(
-        tmp_path_factory,
-        mode="batch_client_feasibility",
-        mode_label="Batch client feasibility",
-        overrides={},
-    )
-    dataset_root = create_sample_feasibility_dataset_root(artifacts_dir)
-    mock_api_ip = None
-
-    try:
-        LOGGER.info("Batch client feasibility stack: ensuring dmz_egress network")
-        dmz_subnet = ensure_dmz_egress_network()
-        if not dmz_subnet:
-            raise AssertionError("Failed to create dmz_egress network")
-
-        dmz_net = ipaddress.ip_network(dmz_subnet)
-        mock_api_ip = str(dmz_net.network_address + 6)
-
-        LOGGER.info("Batch client feasibility stack: starting mock API")
-        assert_ok(
-            compose(
-                MOCK_API_COMPOSE_FLAGS,
-                ["up", "-d", "--build"],
-                env=_mock_api_env(artifacts_dir, mock_api_ip),
-            ),
-            "Failed to start mock API stack",
-        )
-
-        if not ensure_container_ip("ukbgpt_mock_api", "ukbgpt_dmz_egress", mock_api_ip):
-            raise AssertionError("Failed to enforce static IP for mock API")
-        if not wait_for_container_health("ukbgpt_mock_api"):
-            raise AssertionError("Mock API container is unhealthy")
-
-        env.update(
-            {
-                "BATCH_CLIENT_MODE_ON": "true",
-                "ENABLE_API_EGRESS": "true",
-                "BATCH_CLIENT_LISTEN_PORT": "30000",
-                "BATCH_CLIENT_EGRESS_PORT": "30100",
-                "BATCH_CLIENT_MODE_ADDITIONAL_LOCAL_API_ADDRESS": f"https://{mock_api_ip}:8443",
-                "BATCH_CLIENT_MODE_ADDITIONAL_LOCAL_API_SNI": "localhost",
-                "BATCH_CLIENT_MODE_ADDITIONAL_LOCAL_API_IP": mock_api_ip,
-                "BATCH_CLIENT_MODE_ADDITIONAL_LOCAL_EMBEDDING_API_ADDRESS": f"https://{mock_api_ip}:8443",
-                "BATCH_CLIENT_MODE_ADDITIONAL_LOCAL_EMBEDDING_API_SNI": "localhost",
-                "BATCH_CLIENT_MODE_ADDITIONAL_LOCAL_EMBEDDING_API_IP": mock_api_ip,
-                "ENABLE_LDAP": "false",
-                "ENABLE_INTERNAL_METRICS": "false",
-                "ENABLE_METRICS_FORWARDING": "true",
-                "ENABLE_COHORT_FEASIBILITY_APP": "true",
-                "DATASET_STRUCTURING_DATA_ROOT": str(dataset_root),
-            }
-        )
-
-        LOGGER.info("Batch client feasibility stack: launching main stack")
-        _start_stack(env)
-        if not wait_for_container_health("ukbgpt_cohort_feasibility"):
-            raise AssertionError("Cohort feasibility container is unhealthy")
-
-        context = StackContext(
-            mode="batch_client",
-            artifacts_dir=artifacts_dir,
-            server_name=env.get("SERVER_NAME", "localhost"),
-            batch_port=int(env["BATCH_CLIENT_LISTEN_PORT"]),
-            env=env,
-            log_dir=log_dir,
-        )
-        def _cleanup() -> None:
-            batch_env = _with_batch_env(env)
-            extra_log_targets: list[tuple[list[str], str, Dict[str, str]]] = []
-            extra_down_targets: list[tuple[list[str], Dict[str, str]]] = []
-            if mock_api_ip:
-                mock_api_env = _mock_api_env(artifacts_dir, mock_api_ip)
-                extra_log_targets.append(
-                    (MOCK_API_COMPOSE_FLAGS, "mock_api_", mock_api_env)
-                )
-                extra_down_targets.append((MOCK_API_COMPOSE_FLAGS, mock_api_env))
-
-            _teardown_stack(
-                mode_label="Batch client feasibility",
-                primary_compose_flags_factory=_batch_client_feasibility_compose_flags,
-                primary_env=batch_env,
-                log_dir=log_dir,
-                primary_log_prefix="batch_client_feasibility_",
-                extra_log_targets=extra_log_targets,
-                extra_down_targets=extra_down_targets,
-            )
-
-        return ManagedStackInstance(context=context, cleanup=_cleanup)
-    except Exception:
-        batch_env = _with_batch_env(env)
-        extra_log_targets: list[tuple[list[str], str, Dict[str, str]]] = []
-        extra_down_targets: list[tuple[list[str], Dict[str, str]]] = []
-        if mock_api_ip:
-            mock_api_env = _mock_api_env(artifacts_dir, mock_api_ip)
-            extra_log_targets.append(
-                (MOCK_API_COMPOSE_FLAGS, "mock_api_", mock_api_env)
-            )
-            extra_down_targets.append((MOCK_API_COMPOSE_FLAGS, mock_api_env))
-
-        _teardown_stack(
-            mode_label="Batch client feasibility",
-            primary_compose_flags_factory=_batch_client_feasibility_compose_flags,
-            primary_env=batch_env,
-            log_dir=log_dir,
-            primary_log_prefix="batch_client_feasibility_",
-            extra_log_targets=extra_log_targets,
-            extra_down_targets=extra_down_targets,
-        )
-        raise
-
-
 class StackRuntimeManager:
     def __init__(self, tmp_path_factory):
         self._tmp_path_factory = tmp_path_factory
@@ -1039,7 +915,6 @@ class StackRuntimeManager:
             "icmp_monitor_helper_chatbot_provider": _launch_icmp_monitor_helper_chatbot_provider_stack,
             "https_monitor_helper_chatbot_provider": _launch_https_monitor_helper_chatbot_provider_stack,
             "batch_client": _launch_batch_client_stack,
-            "batch_client_feasibility": _launch_batch_client_feasibility_stack,
         }
         try:
             launcher = launchers[name]
@@ -1125,7 +1000,3 @@ def https_monitor_helper_chatbot_provider_stack(stack_runtime) -> StackContext:
 def batch_client_stack(stack_runtime) -> StackContext:
     return stack_runtime.get("batch_client")
 
-
-@pytest.fixture
-def batch_client_feasibility_stack(stack_runtime) -> StackContext:
-    return stack_runtime.get("batch_client_feasibility")
