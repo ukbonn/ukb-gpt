@@ -117,7 +117,7 @@ class Pipeline:
         sliding_window_minutes: Optional[int] = None
 
         day_rate_limit: Union[str, int] = Field(
-            default='{"10": 60, "15": 20, "20": 5, "25": 2, "30": 1, "35": 0}',
+            default='{"0": 16, "1": 15, "2": 14, "3": 13, "4": 12, "5": 11, "6": 10, "7": 9, "8": 8, "9": 7, "10": 6, "11": 5, "12": 4, "13": 3, "14": 2, "15": 1, "16": 0}',
             description="JSON string for adaptive day limits or a fixed integer limit.",
         )
         night_rate_limit: Union[str, int] = Field(
