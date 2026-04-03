@@ -45,6 +45,7 @@ Each deployment config is a small TOML file that selects:
 - the model family
 - the worker GPU groups
 - tensor parallelism
+- data parallelism
 - optional expert parallelism
 - GPU architecture preset selection via `gpu_architecture` (`auto`, `default`, or an explicit vendor-scoped preset)
 
@@ -60,14 +61,17 @@ router = "auto"
 
 [worker_defaults]
 tensor_parallel_size = 2
+data_parallel_size = 2
 expert_parallel_enabled = true
 
 [[workers]]
-gpus = [0, 1]
-
-[[workers]]
-gpus = [2, 3]
+gpus = [0, 1, 2, 3]
 ```
+
+Topology notes:
+
+- `0,1;2,3` still means two separate vLLM worker services, with router auto-mode deciding whether to place `backend_router` in front of them.
+- `0,1,2,3` with `tensor_parallel_size = 2` and `data_parallel_size = 2` means one vLLM worker service using internal vLLM data parallelism across the assigned GPUs.
 
 Path handling:
 
