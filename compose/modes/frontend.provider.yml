@@ -78,6 +78,7 @@ services:
       - "HOST=0.0.0.0" # Force Bind to 0.0.0.0.
       - "PORT=8080"
       - "HF_HOME=/huggingface-cache"
+      - "HF_HUB_CACHE=/huggingface-cache"
       - "PYTHONDONTWRITEBYTECODE=1"
       - "XDG_CACHE_HOME=/app/backend/data/.cache"
       - "CHAT_HISTORY_RETENTION_DAYS=${CHAT_HISTORY_RETENTION_DAYS:-}"

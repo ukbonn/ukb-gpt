@@ -20,7 +20,7 @@ command = [
   "--tool-call-parser=gemma4",
   "--max-model-len=${VLLM_LLM_MAX_MODEL_LEN:-131072}",
   "--gpu-memory-utilization=${VLLM_LLM_GPU_MEMORY_UTILIZATION:-0.90}",
-  "--limit-mm-per-prompt=image=4,audio=1",
+  '--limit-mm-per-prompt={"image":4,"audio":1}',
   "--async-scheduling",
 ]
 default_vllm_openai_image = "vllm/vllm-openai:gemma4-cu130"

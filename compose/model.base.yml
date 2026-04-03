@@ -11,6 +11,7 @@ services:
     # Standard Environment & Networking
     environment:
       - "HF_HOME=/huggingface-cache"
+      - "HF_HUB_CACHE=/huggingface-cache"
       - "HF_MODULES_CACHE=/tmp_exec/hf_modules"
       - "XDG_CONFIG_HOME=/tmp/.config"
       - "VLLM_CACHE_ROOT=/tmp/vllm"
