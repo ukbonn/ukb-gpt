@@ -1,0 +1,51 @@
+[model]
+id = "model.llm.google_gemma_4_31b_it"
+role = "llm"
+title = "Google Gemma-4-31B-it"
+summary = "Large dense Gemma 4 family tuned to vLLM's 32k BF16 serving baseline with image understanding, reasoning, and native tool calling."
+base_compose_file = "compose/models/llm/google--gemma-4-31b-it/base.yml"
+base_service = "gemma4_31b_worker_template"
+order = 50
+wizard_enabled = true
+accelerator = "nvidia"
+supports_expert_parallel = false
+
+[runtime]
+command = [
+  "--port=5000",
+  "--host=0.0.0.0",
+  "--model=google/gemma-4-31B-it",
+  "--enable-auto-tool-choice",
+  "--reasoning-parser=gemma4",
+  "--tool-call-parser=gemma4",
+  "--max-model-len=${VLLM_LLM_MAX_MODEL_LEN:-32768}",
+  "--gpu-memory-utilization=${VLLM_LLM_GPU_MEMORY_UTILIZATION:-0.90}",
+  "--limit-mm-per-prompt=image=4,audio=0",
+  "--async-scheduling",
+]
+default_vllm_openai_image = "vllm/vllm-openai:gemma4-cu130"
+build_args = { VLLM_OPENAI_IMAGE = "${VLLM_OPENAI_IMAGE_LLM:-${VLLM_OPENAI_IMAGE:-vllm/vllm-openai:gemma4-cu130}}" }
+shm_size = "16gb"
+
+[architectures.default]
+
+[[variables]]
+id = "VLLM_OPENAI_IMAGE_LLM"
+prompt_order = 10
+prompt = true
+description = "Worker image override for this LLM family. Use the Gemma 4-capable CUDA 13 vLLM image."
+examples = ["vllm/vllm-openai:gemma4-cu130"]
+
+[[variables]]
+id = "VLLM_LLM_MAX_MODEL_LEN"
+prompt_order = 20
+prompt = true
+description = "Optional max model length override for this model family."
+examples = ["32768"]
+
+[[variables]]
+id = "VLLM_LLM_GPU_MEMORY_UTILIZATION"
+prompt_order = 30
+prompt = true
+description = "Optional GPU memory utilization fraction override for this model family."
+examples = ["0.90"]

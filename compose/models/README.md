@@ -219,6 +219,70 @@ Optional model variables:
 - `VLLM_LLM_MAX_MODEL_LEN` (example: `262144`): Optional max model length override for this model family.
 - `VLLM_LLM_GPU_MEMORY_UTILIZATION` (example: `0.30`): Optional GPU memory utilization fraction override for this model family.
 
+#### Google Gemma-4-E2B-it
+
+Compact Gemma 4 family with 128k context, native audio input, and Gemma-specific reasoning and tool-call parsing.
+
+- Model family ID: `model.llm.google_gemma_4_e2b_it`
+- Base template: `compose/models/llm/google--gemma-4-e2b-it/base.yml`
+- Accelerator: `nvidia`
+- GPU architecture presets: `default`
+- Default worker image: `vllm/vllm-openai:gemma4-cu130`
+
+Optional model variables:
+
+- `VLLM_OPENAI_IMAGE_LLM` (example: `vllm/vllm-openai:gemma4-cu130`): Worker image override for this LLM family. Use the Gemma 4-capable CUDA 13 vLLM image.
+- `VLLM_LLM_MAX_MODEL_LEN` (example: `131072`): Optional max model length override for this model family.
+- `VLLM_LLM_GPU_MEMORY_UTILIZATION` (example: `0.90`): Optional GPU memory utilization fraction override for this model family.
+
+#### Google Gemma-4-E4B-it
+
+Small dense Gemma 4 family with 128k context, native audio input, and Gemma-specific reasoning and tool-call parsing.
+
+- Model family ID: `model.llm.google_gemma_4_e4b_it`
+- Base template: `compose/models/llm/google--gemma-4-e4b-it/base.yml`
+- Accelerator: `nvidia`
+- GPU architecture presets: `default`
+- Default worker image: `vllm/vllm-openai:gemma4-cu130`
+
+Optional model variables:
+
+- `VLLM_OPENAI_IMAGE_LLM` (example: `vllm/vllm-openai:gemma4-cu130`): Worker image override for this LLM family. Use the Gemma 4-capable CUDA 13 vLLM image.
+- `VLLM_LLM_MAX_MODEL_LEN` (example: `131072`): Optional max model length override for this model family.
+- `VLLM_LLM_GPU_MEMORY_UTILIZATION` (example: `0.90`): Optional GPU memory utilization fraction override for this model family.
+
+#### Google Gemma-4-26B-A4B-it
+
+Gemma 4 MoE family tuned to vLLM's 32k BF16 serving baseline with image understanding, reasoning, and native tool calling.
+
+- Model family ID: `model.llm.google_gemma_4_26b_a4b_it`
+- Base template: `compose/models/llm/google--gemma-4-26b-a4b-it/base.yml`
+- Accelerator: `nvidia`
+- GPU architecture presets: `default`
+- Default worker image: `vllm/vllm-openai:gemma4-cu130`
+
+Optional model variables:
+
+- `VLLM_OPENAI_IMAGE_LLM` (example: `vllm/vllm-openai:gemma4-cu130`): Worker image override for this LLM family. Use the Gemma 4-capable CUDA 13 vLLM image.
+- `VLLM_LLM_MAX_MODEL_LEN` (example: `32768`): Optional max model length override for this model family.
+- `VLLM_LLM_GPU_MEMORY_UTILIZATION` (example: `0.90`): Optional GPU memory utilization fraction override for this model family.
+
+#### Google Gemma-4-31B-it
+
+Large dense Gemma 4 family tuned to vLLM's 32k BF16 serving baseline with image understanding, reasoning, and native tool calling.
+
+- Model family ID: `model.llm.google_gemma_4_31b_it`
+- Base template: `compose/models/llm/google--gemma-4-31b-it/base.yml`
+- Accelerator: `nvidia`
+- GPU architecture presets: `default`
+- Default worker image: `vllm/vllm-openai:gemma4-cu130`
+
+Optional model variables:
+
+- `VLLM_OPENAI_IMAGE_LLM` (example: `vllm/vllm-openai:gemma4-cu130`): Worker image override for this LLM family. Use the Gemma 4-capable CUDA 13 vLLM image.
+- `VLLM_LLM_MAX_MODEL_LEN` (example: `32768`): Optional max model length override for this model family.
+- `VLLM_LLM_GPU_MEMORY_UTILIZATION` (example: `0.90`): Optional GPU memory utilization fraction override for this model family.
+
 ### Embedding Families
 
 #### Alibaba-NLP gte-Qwen2-1.5B-instruct
