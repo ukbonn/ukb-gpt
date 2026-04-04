@@ -287,6 +287,22 @@ Optional model variables:
 - `VLLM_LLM_MAX_MODEL_LEN` (example: `32768`): Optional max model length override for this model family.
 - `VLLM_LLM_GPU_MEMORY_UTILIZATION` (example: `0.90`): Optional GPU memory utilization fraction override for this model family.
 
+#### Red Hat AI Gemma-4-31B-it-FP8_BLOCK
+
+Pre-quantized Gemma 4 31B FP8_BLOCK family for vLLM serving with image understanding, reasoning, and native tool calling. Defaults to a conservative 4k context baseline drawn from the upstream checkpoint guidance.
+
+- Model family ID: `model.llm.redhatai_gemma_4_31b_it_fp8_block`
+- Base template: `compose/models/llm/redhatai--gemma-4-31b-it-fp8-block/base.yml`
+- Accelerator: `nvidia`
+- GPU architecture presets: `default`
+- Default worker image: `vllm/vllm-openai:gemma4-cu130`
+
+Optional model variables:
+
+- `VLLM_OPENAI_IMAGE_LLM` (example: `vllm/vllm-openai:gemma4-cu130`): Worker image override for this LLM family. Use the Gemma 4-capable CUDA 13 vLLM image.
+- `VLLM_LLM_MAX_MODEL_LEN` (example: `4096`): Optional max model length override for this model family.
+- `VLLM_LLM_GPU_MEMORY_UTILIZATION` (example: `0.90`): Optional GPU memory utilization fraction override for this model family.
+
 ### Embedding Families
 
 #### Alibaba-NLP gte-Qwen2-1.5B-instruct
