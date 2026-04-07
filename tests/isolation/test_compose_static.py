@@ -134,6 +134,29 @@ def test_compose_internal_ip_reservations():
     assert "172.16.238.13" in str(ldap_ip), "ldap_egress must keep static docker_internal IP .13"
 
 
+def test_ingress_tmpfs_includes_tls_secret_path():
+    base = _load_yaml(ROOT / "compose/base.yml")
+    tmpfs = _get_nested(base, ["services", "ingress", "tmpfs"], [])
+
+    assert any(
+        str(entry) == "/run/secrets:uid=101,gid=101,mode=700"
+        for entry in tmpfs
+    ), "ingress tmpfs must include a writable in-memory /run/secrets mount for TLS key injection"
+
+
+def test_model_base_worker_template_has_http_healthcheck():
+    model_base = _load_yaml(ROOT / "compose/model.base.yml")
+    healthcheck = _get_nested(model_base, ["services", "base_worker_template", "healthcheck"], {})
+    test_cmd = healthcheck.get("test") or []
+
+    assert isinstance(test_cmd, list) and test_cmd[:2] == ["CMD", "python3"], (
+        "base_worker_template must define a Python-based Docker healthcheck"
+    )
+    assert any("/health" in str(entry) for entry in test_cmd), (
+        "base_worker_template healthcheck must probe the local /health endpoint"
+    )
+
+
 def test_ldap_overlay_requires_root_ca_and_internal_bind():
     ldap = _load_yaml(ROOT / "compose/features/ldap.yml")
     env = _get_nested(ldap, ["services", "ldap_egress", "environment"], [])

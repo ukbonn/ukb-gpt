@@ -148,11 +148,11 @@ If you want to add or extend supported model families, start with:
 - `VLLM_OPENAI_IMAGE_EMBEDDING`
 - `VLLM_OPENAI_IMAGE_STT`
 - `VLLM_OPENAI_IMAGE_TTS`
-- `VLLM_OPENAI_IMAGE` as the shared fallback
+- `VLLM_OPENAI_IMAGE` as an optional shared fallback for families that opt into it
 
 Worker-image defaults are declared per model family in `compose/models/**/model.toml`.
-Resolution order is role-specific override, then `VLLM_OPENAI_IMAGE`, then the selected family default.
-This lets you point multiple backend classes at the same newer compatible image when you want to avoid pulling different tags.
+Many families resolve worker images as role-specific override, then `VLLM_OPENAI_IMAGE`, then the selected family default.
+Some families intentionally skip the shared fallback to avoid cross-role image leakage.
 
 ## `gpt-oss` Encodings
 

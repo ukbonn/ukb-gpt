@@ -20,7 +20,7 @@ command = [
   "--gpu-memory-utilization=${VLLM_EMBEDDING_GPU_MEMORY_UTILIZATION:-0.90}",
 ]
 default_vllm_openai_image = "vllm/vllm-openai:v0.14.0"
-build_args = { VLLM_OPENAI_IMAGE = "${VLLM_OPENAI_IMAGE_EMBEDDING:-${VLLM_OPENAI_IMAGE:-vllm/vllm-openai:v0.14.0}}" }
+build_args = { VLLM_OPENAI_IMAGE = "${VLLM_OPENAI_IMAGE_EMBEDDING:-vllm/vllm-openai:v0.14.0}" }
 shm_size = "16gb"
 
 [architectures.default]

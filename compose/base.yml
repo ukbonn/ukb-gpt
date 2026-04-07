@@ -62,6 +62,7 @@ services:
       - /var/cache/nginx:uid=101,gid=101,mode=755
       - /var/log/nginx:uid=101,gid=101,mode=755
       - /run:uid=101,gid=101,mode=755
+      - /run/secrets:uid=101,gid=101,mode=700
 
 networks:
   docker_internal:

@@ -16,14 +16,17 @@ command = [
   "--port=5000",
   "--host=0.0.0.0",
   "--gpu-memory-utilization=${VLLM_TTS_GPU_MEMORY_UTILIZATION:-0.80}",
-  "--stage-configs-path=/workspace/vllm-omni/vllm_omni/model_executor/stage_configs/voxtral_tts.yaml",
+  "--stage-configs-path=${VLLM_TTS_STAGE_CONFIGS_PATH:-/workspace/vllm-omni/vllm_omni/model_executor/stage_configs/voxtral_tts.yaml}",
   "--omni",
   "--trust-remote-code",
   "--enforce-eager",
 ]
 default_vllm_openai_image = "vllm/vllm-omni:v0.18.0"
-build_args = { VLLM_OPENAI_IMAGE = "${VLLM_OPENAI_IMAGE_TTS:-${VLLM_OPENAI_IMAGE:-vllm/vllm-omni:v0.18.0}}" }
+build_args = { VLLM_OPENAI_IMAGE = "${VLLM_OPENAI_IMAGE_TTS:-vllm/vllm-omni:v0.18.0}" }
 shm_size = "16gb"
+extra_volumes = [
+  { type = "bind", source = "${VLLM_TTS_STAGE_CONFIG_HOST_PATH:-/dev/null}", target = "/tmp_exec/voxtral_tts.stage.yaml", read_only = true },
+]
 
 [architectures.default]
 

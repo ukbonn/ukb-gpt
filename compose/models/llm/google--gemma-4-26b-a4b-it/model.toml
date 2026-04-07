@@ -24,7 +24,7 @@ command = [
   "--async-scheduling",
 ]
 default_vllm_openai_image = "vllm/vllm-openai:gemma4-cu130"
-build_args = { VLLM_OPENAI_IMAGE = "${VLLM_OPENAI_IMAGE_LLM:-${VLLM_OPENAI_IMAGE:-vllm/vllm-openai:gemma4-cu130}}" }
+build_args = { VLLM_OPENAI_IMAGE = "${VLLM_OPENAI_IMAGE_LLM:-vllm/vllm-openai:gemma4-cu130}" }
 shm_size = "16gb"
 
 [architectures.default]

@@ -66,6 +66,7 @@ from utils.stack.startup import (
     apply_env_file,
     default_env_file_path,
     discover_backends,
+    plan_service_startup,
     prepare_startup_config,
     env_bool,
     env_str,
@@ -75,6 +76,7 @@ from utils.stack.startup import (
     setup_logging,
     start_services,
 )
+from utils.stack.launch import BackendDiscovery
 
 GPU_PROBE_CMD = [
     "docker",
@@ -207,7 +209,7 @@ def _safe_int(value: str, fallback: int) -> int:
         return fallback
 
 
-def _print_access_endpoints(batch_mode: bool, discovery: dict | None = None) -> None:
+def _print_access_endpoints(batch_mode: bool, discovery: BackendDiscovery | None = None) -> None:
     server_name = env_str("SERVER_NAME", "localhost") or "localhost"
     batch_port = env_str("BATCH_CLIENT_LISTEN_PORT", "30000") or "30000"
     direct_start = env_str("BATCH_CLIENT_DIRECT_PORT_START", "30001") or "30001"
@@ -225,7 +227,7 @@ def _print_access_endpoints(batch_mode: bool, discovery: dict | None = None) -> 
         additional_embedding_api_enabled = env_bool("BATCH_CLIENT_MODE_ADDITIONAL_LOCAL_EMBEDDING_API_ENABLED")
         llm_workers = []
         if discovery:
-            llm_workers = discovery.get("llm_workers", [])
+            llm_workers = list(discovery.llm.workers)
         if not llm_workers and env_str("LLM_BACKEND_NODES"):
             llm_workers = [n.strip().split(":")[0] for n in env_str("LLM_BACKEND_NODES").split(",") if n.strip()]
 
@@ -312,7 +314,7 @@ def _run_up_command(env_file: str | None = None):
         startup_config.deployment_bundle.tts_compose_flags,
         startup_config.deployment_bundle.resolved_deployments,
     )
-    runtime_services = discovery["runtime_services"]
+    runtime_services = list(discovery.runtime_services)
     
     # 4. Building & Service Creation
     # Build first, then create stopped containers so the firewall still lands
@@ -320,6 +322,11 @@ def _run_up_command(env_file: str | None = None):
     # with `up --build --no-start` on some Docker Compose versions.
     is_test = env_bool("IS_INTEGRATION_TEST")
     launch_services = startup_config.core_services + runtime_services
+    launch_plan = plan_service_startup(
+        startup_config.core_services,
+        discovery,
+        startup_config.deployment_bundle.resolved_deployments,
+    )
 
     print("\n--> Building Service Images...")
     build_cmd = [
@@ -377,7 +384,7 @@ def _run_up_command(env_file: str | None = None):
     
     # 6. Launch
     print("\n--> Starting Services in Protected Network...")
-    start_services(startup_config.compose_args, launch_services, startup_config.batch_mode)
+    start_services(startup_config.compose_args, launch_plan, startup_config.batch_mode)
 
     _print_access_endpoints(startup_config.batch_mode, discovery=discovery)
 

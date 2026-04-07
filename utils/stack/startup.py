@@ -17,6 +17,13 @@ from .deployments import (
     prepare_model_deployments,
     resolve_model_deployment_config_path,
 )
+from .launch import (
+    BackendDiscovery,
+    BackendRoleDiscovery,
+    StartupLaunchPlan,
+    plan_service_startup,
+    start_services as start_launch_services,
+)
 from .schema import (
     EnvSchema,
     ModelFamilySpec,
@@ -1767,23 +1774,15 @@ def _print_port_listener_diagnostics(batch_mode: bool) -> None:
         print(f"   {line}")
 
 
-def start_services(compose_args, services, batch_mode: bool) -> None:
-    start_cmd = ["docker", "compose", *compose_args, "start", *services]
-    print(f"  [EXEC] {_format_cmd(start_cmd)}")
-    result = subprocess.run(start_cmd, capture_output=True, text=True)
-    _print_subprocess_output(result)
-    if result.returncode == 0:
-        return
-
-    combined_output = f"{result.stdout}\n{result.stderr}"
-    if "Address already in use" in combined_output:
-        print("\n❌ Error: Ingress failed to bind a host port (Address already in use).")
-        _print_port_listener_diagnostics(batch_mode)
-        print("   Action: stop the conflicting listener(s) or change ingress published ports.")
-        sys.exit(1)
-
-    print(f"\n❌ Error: Command failed: {_format_cmd(start_cmd)}")
-    sys.exit(1)
+def start_services(compose_args, launch_plan: StartupLaunchPlan, batch_mode: bool) -> None:
+    start_launch_services(
+        compose_args,
+        launch_plan,
+        batch_mode,
+        format_cmd=_format_cmd,
+        print_subprocess_output=_print_subprocess_output,
+        port_listener_diagnostics_callback=_print_port_listener_diagnostics,
+    )
 
 def validate_environment(selection: SchemaRuntimeSelection | None = None) -> SchemaRuntimeSelection:
     """
@@ -2552,15 +2551,9 @@ def _discover_backend(
     services: list[str],
     worker_regex: str,
     router_name: str,
-) -> dict:
+) -> BackendRoleDiscovery:
     if not services:
-        return {
-            "workers": [],
-            "router_services": [],
-            "backend_nodes": "",
-            "endpoint": "",
-            "bypass_router": "true",
-        }
+        return _empty_backend_discovery()
 
     pattern = re.compile(worker_regex)
     workers = []
@@ -2595,23 +2588,17 @@ def _discover_backend(
     print(f"🔍 [Discovery] {label}: {len(worker_services)} worker(s): {' '.join(worker_services)}")
     print(f"🔗 [Discovery] {label}: route {backend_nodes}")
 
-    return {
-        "workers": worker_services,
-        "router_services": router_services,
-        "backend_nodes": backend_nodes,
-        "endpoint": endpoint,
-        "bypass_router": bypass_router,
-    }
+    return BackendRoleDiscovery(
+        workers=tuple(worker_services),
+        router_services=tuple(router_services),
+        backend_nodes=backend_nodes,
+        endpoint=endpoint,
+        bypass_router=bypass_router,
+    )
 
 
-def _empty_backend_discovery() -> dict:
-    return {
-        "workers": [],
-        "router_services": [],
-        "backend_nodes": "",
-        "endpoint": "",
-        "bypass_router": "true",
-    }
+def _empty_backend_discovery() -> BackendRoleDiscovery:
+    return BackendRoleDiscovery()
 
 
 def _split_semicolon_values(raw: str) -> list[str]:
@@ -2683,7 +2670,7 @@ def discover_backends(
     stt_compose_flags: list[str],
     tts_compose_flags: list[str],
     resolved_deployments=(),
-) -> dict:
+) -> BackendDiscovery:
     """
     Discovers chat, embedding, and STT backend services and exports runtime env wiring.
     """
@@ -2735,23 +2722,23 @@ def discover_backends(
         else _empty_backend_discovery()
     )
 
-    if not llm["workers"] and not embedding["workers"]:
+    if not llm.workers and not embedding.workers:
         batch_mode = env_bool("BATCH_CLIENT_MODE_ON")
         dictation_enabled = env_bool("ENABLE_DICTATION_APP")
-        if dictation_enabled and stt["workers"]:
-            if tts["workers"]:
+        if dictation_enabled and stt.workers:
+            if tts.workers:
                 print("ℹ️  [Discovery] STT/TTS-only backend mode enabled for dictation.")
             else:
                 print("ℹ️  [Discovery] STT-only backend mode enabled for dictation.")
             print("   LLM/embedding workers are disabled by configuration.")
-        elif batch_mode and tts["workers"]:
+        elif batch_mode and tts.workers:
             print("ℹ️  [Discovery] TTS-only backend mode enabled for batch usage.")
             print("   LLM/embedding workers are disabled by configuration.")
         else:
             print("❌ Error: No LLM, embedding, or allowed fallback backend workers discovered.")
-            if stt["workers"] and not dictation_enabled:
+            if stt.workers and not dictation_enabled:
                 print("   STT-only mode is supported only when ENABLE_DICTATION_APP=true.")
-            if tts["workers"] and not batch_mode:
+            if tts.workers and not batch_mode:
                 print("   TTS-only mode is supported only in batch client mode.")
             print(
                 "   Action: keep MODEL_DEPLOYMENT_CONFIG and/or "
@@ -2763,49 +2750,49 @@ def discover_backends(
             )
             sys.exit(1)
 
-    os.environ["LLM_BACKEND_NODES"] = llm["backend_nodes"]
-    os.environ["EMBEDDING_BACKEND_NODES"] = embedding["backend_nodes"]
-    os.environ["STT_BACKEND_NODES"] = stt["backend_nodes"]
-    os.environ["TTS_BACKEND_NODES"] = tts["backend_nodes"]
-    os.environ["LLM_BYPASS_ROUTER"] = llm["bypass_router"]
-    os.environ["EMBEDDING_BYPASS_ROUTER"] = embedding["bypass_router"]
-    os.environ["STT_BYPASS_ROUTER"] = stt["bypass_router"]
-    os.environ["TTS_BYPASS_ROUTER"] = tts["bypass_router"]
-    os.environ["LLM_ENDPOINT"] = llm["endpoint"]
-    os.environ["EMBEDDING_ENDPOINT"] = embedding["endpoint"]
-    os.environ["STT_ENDPOINT"] = stt["endpoint"]
-    os.environ["TTS_ENDPOINT"] = tts["endpoint"]
+    os.environ["LLM_BACKEND_NODES"] = llm.backend_nodes
+    os.environ["EMBEDDING_BACKEND_NODES"] = embedding.backend_nodes
+    os.environ["STT_BACKEND_NODES"] = stt.backend_nodes
+    os.environ["TTS_BACKEND_NODES"] = tts.backend_nodes
+    os.environ["LLM_BYPASS_ROUTER"] = llm.bypass_router
+    os.environ["EMBEDDING_BYPASS_ROUTER"] = embedding.bypass_router
+    os.environ["STT_BYPASS_ROUTER"] = stt.bypass_router
+    os.environ["TTS_BYPASS_ROUTER"] = tts.bypass_router
+    os.environ["LLM_ENDPOINT"] = llm.endpoint
+    os.environ["EMBEDDING_ENDPOINT"] = embedding.endpoint
+    os.environ["STT_ENDPOINT"] = stt.endpoint
+    os.environ["TTS_ENDPOINT"] = tts.endpoint
 
     # Backward compatibility for existing templates/features.
-    fallback_nodes = llm["backend_nodes"] or embedding["backend_nodes"]
-    fallback_bypass = llm["bypass_router"] if llm["workers"] else embedding["bypass_router"]
-    primary_endpoint = llm["endpoint"] or embedding["endpoint"]
-    if not primary_endpoint and env_bool("ENABLE_DICTATION_APP") and stt["endpoint"]:
+    fallback_nodes = llm.backend_nodes or embedding.backend_nodes
+    fallback_bypass = llm.bypass_router if llm.workers else embedding.bypass_router
+    primary_endpoint = llm.endpoint or embedding.endpoint
+    if not primary_endpoint and env_bool("ENABLE_DICTATION_APP") and stt.endpoint:
         # Dictation STT-only mode still needs a valid OpenAI endpoint in frontend env wiring.
-        fallback_nodes = stt["backend_nodes"]
-        fallback_bypass = stt["bypass_router"]
-        primary_endpoint = stt["endpoint"]
-    elif not primary_endpoint and env_bool("BATCH_CLIENT_MODE_ON") and tts["endpoint"]:
-        fallback_nodes = tts["backend_nodes"]
-        fallback_bypass = tts["bypass_router"]
-        primary_endpoint = tts["endpoint"]
+        fallback_nodes = stt.backend_nodes
+        fallback_bypass = stt.bypass_router
+        primary_endpoint = stt.endpoint
+    elif not primary_endpoint and env_bool("BATCH_CLIENT_MODE_ON") and tts.endpoint:
+        fallback_nodes = tts.backend_nodes
+        fallback_bypass = tts.bypass_router
+        primary_endpoint = tts.endpoint
     os.environ["BACKEND_NODES"] = fallback_nodes
     os.environ["BYPASS_ROUTER"] = fallback_bypass
     os.environ["VLLM_ENDPOINT"] = primary_endpoint
     os.environ["PRIMARY_OPENAI_ENDPOINT"] = primary_endpoint
 
     openai_base_urls = []
-    if llm["endpoint"]:
-        openai_base_urls.append(f"http://{llm['endpoint']}/v1")
+    if llm.endpoint:
+        openai_base_urls.append(f"http://{llm.endpoint}/v1")
         print(
             "🔗 [Discovery] OpenWebUI provider API LLM backend: "
-            f"http://{llm['endpoint']}/v1"
+            f"http://{llm.endpoint}/v1"
         )
-    if embedding["endpoint"] and embedding["endpoint"] != llm["endpoint"]:
-        openai_base_urls.append(f"http://{embedding['endpoint']}/v1")
+    if embedding.endpoint and embedding.endpoint != llm.endpoint:
+        openai_base_urls.append(f"http://{embedding.endpoint}/v1")
         print(
             "🔗 [Discovery] OpenWebUI provider API embedding backend: "
-            f"http://{embedding['endpoint']}/v1 "
+            f"http://{embedding.endpoint}/v1 "
             "(exposed via /api/models and /api/embeddings)"
         )
     _configure_frontend_openai_connections(
@@ -2815,11 +2802,11 @@ def discover_backends(
     )
 
     # If embedding backend exists, wire OpenWebUI's internal RAG embeddings to it.
-    if embedding["endpoint"]:
+    if embedding.endpoint:
         if not env_str("RAG_EMBEDDING_ENGINE"):
             os.environ["RAG_EMBEDDING_ENGINE"] = "openai"
         if not env_str("RAG_OPENAI_API_BASE_URL"):
-            os.environ["RAG_OPENAI_API_BASE_URL"] = f"http://{embedding['endpoint']}/v1"
+            os.environ["RAG_OPENAI_API_BASE_URL"] = f"http://{embedding.endpoint}/v1"
         embedding_model_id = (
             env_str("EMBEDDING_MODEL_ID")
             or _resolved_model_id_for_role(resolved_deployments, "embedding")
@@ -2835,11 +2822,11 @@ def discover_backends(
     # STT intentionally remains on the dedicated audio env vars. OpenWebUI's
     # transcription integration is configured via AUDIO_STT_* rather than the
     # generic OPENAI_API_BASE_URLS provider list.
-    if stt["endpoint"]:
+    if stt.endpoint:
         if not env_str("AUDIO_STT_ENGINE"):
             os.environ["AUDIO_STT_ENGINE"] = "openai"
         if not env_str("AUDIO_STT_OPENAI_API_BASE_URL"):
-            os.environ["AUDIO_STT_OPENAI_API_BASE_URL"] = f"http://{stt['endpoint']}/v1"
+            os.environ["AUDIO_STT_OPENAI_API_BASE_URL"] = f"http://{stt.endpoint}/v1"
         stt_model_id = (
             env_str("STT_MODEL_ID")
             or _resolved_model_id_for_role(resolved_deployments, "stt")
@@ -2852,7 +2839,7 @@ def discover_backends(
             f"{os.environ['AUDIO_STT_OPENAI_API_BASE_URL']} ({os.environ['AUDIO_STT_MODEL']})"
         )
 
-    if tts["endpoint"]:
+    if tts.endpoint:
         tts_model_id = (
             env_str("TTS_MODEL_ID")
             or _resolved_model_id_for_role(resolved_deployments, "tts")
@@ -2862,27 +2849,12 @@ def discover_backends(
             os.environ["TTS_MODEL_ID"] = tts_model_id
         print(
             "🔗 [Discovery] Internal TTS backend: "
-            f"http://{tts['endpoint']}/v1 ({tts_model_id})"
+            f"http://{tts.endpoint}/v1 ({tts_model_id})"
         )
 
-    runtime_services = []
-    for service in (
-        llm["router_services"]
-        + llm["workers"]
-        + embedding["router_services"]
-        + embedding["workers"]
-        + stt["router_services"]
-        + stt["workers"]
-        + tts["router_services"]
-        + tts["workers"]
-    ):
-        if service not in runtime_services:
-            runtime_services.append(service)
-
-    return {
-        "runtime_services": runtime_services,
-        "llm_workers": llm["workers"],
-        "embedding_workers": embedding["workers"],
-        "stt_workers": stt["workers"],
-        "tts_workers": tts["workers"],
-    }
+    return BackendDiscovery(
+        llm=llm,
+        embedding=embedding,
+        stt=stt,
+        tts=tts,
+    )

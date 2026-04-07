@@ -495,6 +495,7 @@ def render_model_compose(
                 "service": resolved.family.base_service,
             },
             "container_name": _container_name(resolved.role, index),
+            "image": _worker_image_name(resolved.role, index),
         }
 
         build_args = dict(runtime.build_args)
@@ -753,6 +754,16 @@ def _container_name(role: str, index: int) -> str:
     return f"ukbgpt_worker_{index}"
 
 
+def _worker_image_name(role: str, index: int) -> str:
+    if role == "embedding":
+        return f"ukbgpt-embedding-worker-{index}:local"
+    if role == "stt":
+        return f"ukbgpt-stt-worker-{index}:local"
+    if role == "tts":
+        return f"ukbgpt-tts-worker-{index}:local"
+    return f"ukbgpt-worker-{index}:local"
+
+
 def _router_service_name(role: str) -> str:
     if role == "embedding":
         return "embedding_backend_router"
@@ -775,6 +786,22 @@ def _router_container_name(role: str) -> str:
 
 def _router_backend_nodes(role: str, *, worker_count: int) -> str:
     return ",".join(f"{_worker_service_name(role, index)}:5000" for index in range(worker_count))
+
+
+def worker_service_name(role: str, index: int) -> str:
+    return _worker_service_name(role, index)
+
+
+def worker_container_name(role: str, index: int) -> str:
+    return _container_name(role, index)
+
+
+def router_service_name(role: str) -> str:
+    return _router_service_name(role)
+
+
+def router_container_name(role: str) -> str:
+    return _router_container_name(role)
 
 
 def _deployment_env_value(path: Path, *, root_dir: str | Path) -> str:

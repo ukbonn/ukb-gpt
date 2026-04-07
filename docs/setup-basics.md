@@ -90,7 +90,8 @@ Worker image resolution follows this order:
 - `VLLM_OPENAI_IMAGE`
 
 Worker-image defaults are declared per selected model family in `compose/models/**/model.toml`.
-Resolution order is role-specific override, then `VLLM_OPENAI_IMAGE`, then the selected family default.
+Many families resolve worker images as role-specific override, then `VLLM_OPENAI_IMAGE`, then the selected family default.
+Some families intentionally skip the shared fallback to avoid cross-role image leakage.
 
 ## `gpt-oss` Encodings
 

@@ -218,11 +218,44 @@ def test_render_model_compose_qwen_single_gpu(tmp_path):
     worker = rendered["services"]["worker_0"]
     assert "backend_router" not in rendered["services"]
     assert worker["deploy"]["resources"]["reservations"]["devices"][0]["device_ids"] == ["0"]
+    assert worker["image"] == "ukbgpt-worker-0:local"
     assert "--scheduling-policy=priority" in worker["command"]
     assert "--tensor-parallel-size=1" in worker["command"]
     assert Path(worker["extends"]["file"]).resolve() == (
         ROOT / "compose" / "models" / "llm" / "qwen--qwen3.5-0.8b" / "base.yml"
     )
+
+
+def test_rendered_worker_images_are_role_scoped(tmp_path):
+    schema = _schema()
+    llm_resolved = model_deployment.resolve_model_deployment(
+        schema=schema,
+        config_path=str(ROOT / "tests" / "model_deployments" / "qwen-single.toml"),
+        config_var="MODEL_DEPLOYMENT_CONFIG",
+        runtime_mode="chatbot_provider",
+        generated_compose_path=str(tmp_path / "model.llm.yml"),
+        gpu_inventory={0: _gpu(0, "A100", "nvidia_ampere")},
+    )
+    embedding_resolved = model_deployment.resolve_model_deployment(
+        schema=schema,
+        config_path=str(ROOT / "tests" / "model_deployments" / "qwen3-embedding-4b.single-gpu.toml"),
+        config_var="EMBEDDING_MODEL_DEPLOYMENT_CONFIG",
+        runtime_mode="chatbot_provider",
+        generated_compose_path=str(tmp_path / "model.embedding.yml"),
+        gpu_inventory={0: _gpu(0, "A100", "nvidia_ampere")},
+    )
+
+    llm_rendered = model_deployment.render_model_compose(
+        llm_resolved,
+        output_path=str(tmp_path / "model.llm.yml"),
+    )
+    embedding_rendered = model_deployment.render_model_compose(
+        embedding_resolved,
+        output_path=str(tmp_path / "model.embedding.yml"),
+    )
+
+    assert llm_rendered["services"]["worker_0"]["image"] == "ukbgpt-worker-0:local"
+    assert embedding_rendered["services"]["embedding_worker_0"]["image"] == "ukbgpt-embedding-worker-0:local"
 
 
 def test_list_wizard_model_deployments_filters_to_matching_family(tmp_path):
