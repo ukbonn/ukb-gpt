@@ -24,12 +24,7 @@ command = [
   '--limit-mm-per-prompt={"image":1,"audio":1,"video":1}',
   "--async-scheduling",
 ]
-environment = {
-  MULTIMODAL_STT_ADAPTER_PORT = "5000",
-  MULTIMODAL_STT_INNER_PORT = "5001",
-  MULTIMODAL_STT_SERVED_MODEL = "google/gemma-4-E4B-it",
-  MULTIMODAL_STT_TRANSCRIPTION_MAX_TOKENS = "${MULTIMODAL_STT_TRANSCRIPTION_MAX_TOKENS:-2048}",
-}
+environment = { MULTIMODAL_STT_ADAPTER_PORT = "5000", MULTIMODAL_STT_INNER_PORT = "5001", MULTIMODAL_STT_SERVED_MODEL = "google/gemma-4-E4B-it", MULTIMODAL_STT_TRANSCRIPTION_MAX_TOKENS = "${MULTIMODAL_STT_TRANSCRIPTION_MAX_TOKENS:-2048}" }
 default_vllm_openai_image = "vllm/vllm-openai:gemma4-cu130"
 build_args = { VLLM_OPENAI_IMAGE = "${VLLM_OPENAI_IMAGE_STT:-vllm/vllm-openai:gemma4-cu130}", EXTRA_PIP_PACKAGES = "${VLLM_STT_EXTRA_PIP_PACKAGES:-av soxr librosa soundfile}" }
 shm_size = "16gb"
