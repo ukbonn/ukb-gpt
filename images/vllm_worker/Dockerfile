@@ -1,5 +1,5 @@
 ARG VLLM_OPENAI_IMAGE=vllm/vllm-openai:v0.14.0
-FROM ${VLLM_OPENAI_IMAGE}
+FROM ${VLLM_OPENAI_IMAGE} AS base
 
 ARG EXTRA_PIP_PACKAGES=""
 
@@ -21,5 +21,14 @@ RUN if [ -n "${EXTRA_PIP_PACKAGES}" ]; then \
 # and GPU driver access depending on the runtime version.
 # BUT: Because we do NOT have 'cap_add: NET_ADMIN', this root user 
 # cannot touch the network firewall.
+
+FROM base AS stt_adapter
+
+WORKDIR /app
+COPY apps/multimodal_stt_adapter/app.py /app/multimodal_stt_adapter.py
+
+ENTRYPOINT ["/usr/local/bin/active_isolation_monitoring_entrypoint.sh", "python3", "/app/multimodal_stt_adapter.py"]
+
+FROM base AS api_server
 
 ENTRYPOINT ["/usr/local/bin/active_isolation_monitoring_entrypoint.sh", "python3", "-m", "vllm.entrypoints.openai.api_server"]

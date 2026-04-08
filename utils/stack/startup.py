@@ -2620,6 +2620,22 @@ def _resolved_model_id_for_role(resolved_deployments, role: str) -> str:
     return ""
 
 
+def _resolved_deployment_for_role(resolved_deployments, role: str):
+    for deployment in resolved_deployments:
+        if deployment.role == role:
+            return deployment
+    return None
+
+
+def _provider_api_base_url_for_stt(resolved_deployments, stt_endpoint: str) -> str:
+    if not stt_endpoint:
+        return ""
+    deployment = _resolved_deployment_for_role(resolved_deployments, "stt")
+    if deployment is None or not deployment.family.expose_in_provider_api:
+        return ""
+    return f"http://{stt_endpoint}/v1"
+
+
 def _configure_frontend_openai_connections(
     *,
     openai_base_urls: list[str],
@@ -2788,6 +2804,14 @@ def discover_backends(
             "🔗 [Discovery] OpenWebUI provider API LLM backend: "
             f"http://{llm.endpoint}/v1"
         )
+    stt_provider_api_url = _provider_api_base_url_for_stt(resolved_deployments, stt.endpoint)
+    if stt_provider_api_url and stt.endpoint != llm.endpoint:
+        openai_base_urls.append(stt_provider_api_url)
+        print(
+            "🔗 [Discovery] OpenWebUI provider API multimodal STT backend: "
+            f"{stt_provider_api_url} "
+            "(exposed via /api/models for fast multimodal chat)"
+        )
     if embedding.endpoint and embedding.endpoint != llm.endpoint:
         openai_base_urls.append(f"http://{embedding.endpoint}/v1")
         print(
@@ -2838,6 +2862,12 @@ def discover_backends(
             "🔗 [Discovery] OpenWebUI dedicated STT backend: "
             f"{os.environ['AUDIO_STT_OPENAI_API_BASE_URL']} ({os.environ['AUDIO_STT_MODEL']})"
         )
+        if env_bool("ENABLE_DICTATION_APP") and not env_str("DICTATION_LLM_BASE_URL") and stt_provider_api_url:
+            os.environ["DICTATION_LLM_BASE_URL"] = stt_provider_api_url
+            print(
+                "🔗 [Discovery] Dictation translation backend defaulted to multimodal STT endpoint: "
+                f"{stt_provider_api_url}"
+            )
 
     if tts.endpoint:
         tts_model_id = (

@@ -23,7 +23,7 @@ export STT_MODEL_DEPLOYMENT_CONFIG="examples/model_deployments/voxtral-mini-4b.s
 
 - setting STT_MODEL_DEPLOYMENT_CONFIG enables the STT backend
 - startup appends a runtime-generated STT compose file when the deployment config is present
-- OpenWebUI keeps STT on AUDIO_STT_OPENAI_API_BASE_URL and AUDIO_STT_MODEL instead of adding it to OPENAI_API_BASE_URLS
+- OpenWebUI keeps STT on AUDIO_STT_OPENAI_API_BASE_URL and AUDIO_STT_MODEL for transcription, while specially marked multimodal STT families may also be appended to OPENAI_API_BASE_URLS for chat and /api/models exposure
 
 ## Verify
 

@@ -20,7 +20,6 @@ command = [
   "--tool-call-parser=gemma4",
   "--max-model-len=${VLLM_LLM_MAX_MODEL_LEN:-131072}",
   "--gpu-memory-utilization=${VLLM_LLM_GPU_MEMORY_UTILIZATION:-0.90}",
-  "--kv-cache-dtype=fp8",
   '--limit-mm-per-prompt={"image":2,"audio":0}',
   "--async-scheduling",
 ]

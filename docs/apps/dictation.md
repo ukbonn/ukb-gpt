@@ -45,6 +45,8 @@ export ENABLE_DICTATION_APP="true"
 - `DICTATION_TTS_BASE_URL` (example: `http://tts_backend_router:5000/v1`): Optional OpenAI-compatible TTS base URL override for dictation read-aloud.
 - `DICTATION_TTS_DEFAULT_VOICE` (default: `casual_male`, example: `casual_male`): Default voice used by dictation translated-text read-aloud.
 - `DICTATION_TTS_RESPONSE_FORMAT` (default: `wav`, example: `wav`): Default response format used by dictation translated-text read-aloud.
+- `DICTATION_TRANSCRIPTION_PROMPT_PATH` (example: `/app/transcription_prompt.txt`): Optional prompt template path used for dictation transcription requests.
+- `DICTATION_BACK_TRANSLATION_PROMPT_PATH` (example: `/app/back_translation_prompt.txt`): Optional prompt template path used for dictation verification back-translation requests.
 
 Related compose overlay:
 

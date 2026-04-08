@@ -1,0 +1,5 @@
+Translate the following {{OUTPUT_LANGUAGE}} text into {{INPUT_LANGUAGE}}.
+
+Return only the translated text on one line.
+
+{{TEXT}}

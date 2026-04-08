@@ -10,7 +10,11 @@ RUN python -m pip install --upgrade pip \
 
 WORKDIR /app
 COPY apps/dictation/app.py /app/dictation_app.py
+COPY apps/dictation/core.py /app/dictation_core.py
+COPY apps/dictation/core.py /app/apps/dictation/core.py
 COPY apps/dictation/translate_prompt.txt /app/translate_prompt.txt
+COPY apps/dictation/transcription_prompt.txt /app/transcription_prompt.txt
+COPY apps/dictation/back_translation_prompt.txt /app/back_translation_prompt.txt
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \

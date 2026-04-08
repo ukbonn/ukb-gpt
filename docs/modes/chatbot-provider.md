@@ -28,8 +28,8 @@ export OPENWEBUI_DATA_DIR="/var/lib/ukbgpt/openwebui-data"
 
 - ingress publishes 0.0.0.0:80 and 0.0.0.0:443
 - OpenWebUI local state is persisted under OPENWEBUI_DATA_DIR
-- OPENAI_API_BASE_URLS carries the primary LLM backend and, when enabled, the embedding backend for external OpenWebUI API usage
-- STT remains wired through the dedicated AUDIO_STT_OPENAI_API_BASE_URL path rather than OPENAI_API_BASE_URLS
+- OPENAI_API_BASE_URLS carries the primary LLM backend and, when enabled, the embedding backend plus explicitly provider-exposed multimodal STT families for external OpenWebUI API usage
+- STT remains wired through the dedicated AUDIO_STT_OPENAI_API_BASE_URL path for transcription, even when a multimodal STT family is also exposed in OPENAI_API_BASE_URLS
 - startup fails fast when TLS key/cert or WEBUI_SECRET_KEY is missing
 
 ## Verify

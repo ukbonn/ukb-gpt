@@ -292,7 +292,7 @@ Optional model variables:
 
 #### Red Hat AI Gemma-4-31B-it-FP8_BLOCK
 
-Pre-quantized Gemma 4 31B FP8_BLOCK family for vLLM serving with image understanding, reasoning, and native tool calling. Defaults to a conservative 4k context baseline drawn from the upstream checkpoint guidance.
+Pre-quantized Gemma 4 31B FP8_BLOCK family for vLLM serving with image understanding, reasoning, and native tool calling. Defaults to a 128k context baseline with FP8 KV cache and a two-image multimodal limit for production-style deployments.
 
 - Model family ID: `model.llm.redhatai_gemma_4_31b_it_fp8_block`
 - Base template: `compose/models/llm/redhatai--gemma-4-31b-it-fp8-block/base.yml`
@@ -303,7 +303,7 @@ Pre-quantized Gemma 4 31B FP8_BLOCK family for vLLM serving with image understan
 Optional model variables:
 
 - `VLLM_OPENAI_IMAGE_LLM` (example: `vllm/vllm-openai:gemma4-cu130`): Worker image override for this LLM family. Use the Gemma 4-capable CUDA 13 vLLM image.
-- `VLLM_LLM_MAX_MODEL_LEN` (example: `4096`): Optional max model length override for this model family.
+- `VLLM_LLM_MAX_MODEL_LEN` (example: `131072`): Optional max model length override for this model family.
 - `VLLM_LLM_GPU_MEMORY_UTILIZATION` (example: `0.90`): Optional GPU memory utilization fraction override for this model family.
 
 ### Embedding Families
@@ -359,6 +359,23 @@ Optional model variables:
 - `VLLM_STT_LD_PRELOAD` (example: `/usr/lib/x86_64-linux-gnu/libjemalloc.so.2`): Optional LD_PRELOAD override for STT workers.
 - `VLLM_STT_GPU_MEMORY_UTILIZATION` (example: `0.70`): Optional GPU memory utilization fraction override for STT workers.
 - `VLLM_STT_MAX_MODEL_LEN` (example: `131072`): Optional max model length override for STT workers.
+
+#### Google Gemma-4-E4B-it
+
+Gemma 4 E4B multimodal STT adapter family that keeps OpenAI transcription compatibility while exposing the same backend for fast audio, image, and video chat.
+
+- Model family ID: `model.stt.google_gemma_4_e4b_it`
+- Base template: `compose/models/stt/google--gemma-4-e4b-it/base.yml`
+- Accelerator: `nvidia`
+- GPU architecture presets: `default`
+- Default worker image: `vllm/vllm-openai:gemma4-cu130`
+
+Optional model variables:
+
+- `VLLM_OPENAI_IMAGE_STT` (example: `vllm/vllm-openai:gemma4-cu130`): Worker image override for this Gemma E4B STT family.
+- `VLLM_STT_EXTRA_PIP_PACKAGES` (example: `soxr librosa soundfile`): Optional additional pip packages for Gemma STT adapter image builds.
+- `VLLM_STT_GPU_MEMORY_UTILIZATION` (example: `0.85`): Optional GPU memory utilization fraction override for this STT family.
+- `VLLM_STT_MAX_MODEL_LEN` (example: `131072`): Optional max model length override for this STT family.
 
 ### TTS Families
 

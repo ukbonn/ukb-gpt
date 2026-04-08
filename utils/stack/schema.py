@@ -105,6 +105,7 @@ class ModelFamilySpec:
     wizard_enabled: bool
     accelerator: str
     supports_expert_parallel: bool
+    expose_in_provider_api: bool
     toml_file: str
     runtime: ModelRuntimeSpec
     architectures: dict[str, ModelArchitecturePresetSpec]
@@ -456,6 +457,7 @@ def _parse_model_family(
     wizard_enabled = bool(model.get("wizard_enabled", True))
     accelerator = str(model.get("accelerator", "nvidia")).strip()
     supports_expert_parallel = bool(model.get("supports_expert_parallel", False))
+    expose_in_provider_api = bool(model.get("expose_in_provider_api", False))
 
     if not family_id:
         raise ValueError(f"Missing model.id in {model_path}")
@@ -635,6 +637,7 @@ def _parse_model_family(
         wizard_enabled=wizard_enabled,
         accelerator=accelerator,
         supports_expert_parallel=supports_expert_parallel,
+        expose_in_provider_api=expose_in_provider_api,
         toml_file=os.path.relpath(model_path, root_dir),
         runtime=runtime,
         architectures=architectures,

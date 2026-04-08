@@ -1,6 +1,6 @@
 # Dictation App
 
-Optional internal Gradio UI for speech-to-text transcription, translation, and translated-text read-aloud.
+Optional internal Gradio UI for speech-to-text transcription, translation, verification via back-translation, and translated-text read-aloud.
 
 ## Enable
 
@@ -11,6 +11,14 @@ export STT_MODEL_ID="mistralai/Voxtral-Mini-4B-Realtime-2602"
 ```
 
 The app is exposed only through ingress at `https://<SERVER_NAME>/dictation/`.
+
+## Workflow
+
+- `Input language`: language spoken by the speaker
+- `Output language`: language you want in the primary output box
+- leave `Output language` empty for a same-language transcription
+- if `Output language` differs from `Input language`, the app fills the primary output box with the translated text and the verification box with a back-translation into the input language
+- after editing the primary output manually, use `Refresh Verification` to regenerate the confirmation text without retranscribing the audio
 
 Optional translated-text read-aloud:
 
