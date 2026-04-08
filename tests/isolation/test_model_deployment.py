@@ -172,6 +172,39 @@ def test_resolve_model_deployment_rejects_tensor_parallel_exceeds_gpu_count(tmp_
         )
 
 
+def test_resolve_model_deployment_rejects_parallel_product_exceeds_gpu_count(tmp_path):
+    schema = _schema()
+    deployment_path = _write_deployment(
+        tmp_path / "invalid-parallel-product.toml",
+        [
+            'api_version = "ukbgpt/v1alpha1"',
+            'kind = "model_deployment"',
+            'role = "llm"',
+            'model_family = "model.llm.redhatai_gemma_4_31b_it_fp8_block"',
+            'gpu_architecture = "auto"',
+            'router = "auto"',
+            "",
+            "[worker_defaults]",
+            "tensor_parallel_size = 2",
+            "pipeline_parallel_size = 2",
+            "data_parallel_size = 2",
+            "",
+            "[[workers]]",
+            "gpus = [0, 1, 2, 3, 4, 5]",
+        ],
+    )
+
+    with pytest.raises(ValueError, match="pipeline_parallel_size"):
+        model_deployment.resolve_model_deployment(
+            schema=schema,
+            config_path=str(deployment_path),
+            config_var="MODEL_DEPLOYMENT_CONFIG",
+            runtime_mode="chatbot_provider",
+            generated_compose_path=str(tmp_path / "model.llm.yml"),
+            gpu_inventory={index: _gpu(index, "A100", "nvidia_ampere") for index in range(6)},
+        )
+
+
 def test_resolve_model_deployment_rejects_unsupported_expert_parallel(tmp_path):
     schema = _schema()
     deployment_path = _write_deployment(
@@ -221,6 +254,7 @@ def test_render_model_compose_qwen_single_gpu(tmp_path):
     assert worker["image"] == "ukbgpt-worker-0:local"
     assert "--scheduling-policy=priority" in worker["command"]
     assert "--tensor-parallel-size=1" in worker["command"]
+    assert "--pipeline-parallel-size=1" in worker["command"]
     assert Path(worker["extends"]["file"]).resolve() == (
         ROOT / "compose" / "models" / "llm" / "qwen--qwen3.5-0.8b" / "base.yml"
     )
@@ -256,6 +290,45 @@ def test_rendered_worker_images_are_role_scoped(tmp_path):
 
     assert llm_rendered["services"]["worker_0"]["image"] == "ukbgpt-worker-0:local"
     assert embedding_rendered["services"]["embedding_worker_0"]["image"] == "ukbgpt-embedding-worker-0:local"
+
+
+def test_render_model_compose_includes_pipeline_parallel_flag(tmp_path):
+    schema = _schema()
+    deployment_path = _write_deployment(
+        tmp_path / "gemma-pipeline.toml",
+        [
+            'api_version = "ukbgpt/v1alpha1"',
+            'kind = "model_deployment"',
+            'role = "llm"',
+            'model_family = "model.llm.redhatai_gemma_4_31b_it_fp8_block"',
+            'gpu_architecture = "auto"',
+            'router = "auto"',
+            "",
+            "[worker_defaults]",
+            "tensor_parallel_size = 1",
+            "pipeline_parallel_size = 2",
+            "data_parallel_size = 3",
+            "",
+            "[[workers]]",
+            "gpus = [0, 1, 2, 3, 4, 5]",
+        ],
+    )
+
+    resolved = model_deployment.resolve_model_deployment(
+        schema=schema,
+        config_path=str(deployment_path),
+        config_var="MODEL_DEPLOYMENT_CONFIG",
+        runtime_mode="chatbot_provider",
+        generated_compose_path=str(tmp_path / "model.llm.yml"),
+        gpu_inventory={index: _gpu(index, "A100", "nvidia_ampere") for index in range(6)},
+    )
+
+    rendered = model_deployment.render_model_compose(resolved, output_path=str(tmp_path / "model.llm.yml"))
+    worker = rendered["services"]["worker_0"]
+
+    assert "--tensor-parallel-size=1" in worker["command"]
+    assert "--pipeline-parallel-size=2" in worker["command"]
+    assert "--data-parallel-size=3" in worker["command"]
 
 
 def test_list_wizard_model_deployments_filters_to_matching_family(tmp_path):

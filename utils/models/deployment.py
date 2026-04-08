@@ -38,6 +38,7 @@ class LocalGpuInfo:
 @dataclass(frozen=True)
 class ModelDeploymentWorkerDefaults:
     tensor_parallel_size: int | None
+    pipeline_parallel_size: int | None
     data_parallel_size: int | None
     expert_parallel_enabled: bool | None
 
@@ -46,6 +47,7 @@ class ModelDeploymentWorkerDefaults:
 class ModelDeploymentWorkerSpec:
     gpus: tuple[int, ...]
     tensor_parallel_size: int | None
+    pipeline_parallel_size: int | None
     data_parallel_size: int | None
     expert_parallel_enabled: bool | None
 
@@ -75,6 +77,7 @@ class WizardModelDeploymentOption:
 class ResolvedDeploymentWorker:
     gpus: tuple[int, ...]
     tensor_parallel_size: int
+    pipeline_parallel_size: int
     data_parallel_size: int
     expert_parallel_enabled: bool
 
@@ -143,6 +146,10 @@ def parse_model_deployment(path: str | Path) -> ModelDeploymentSpec:
             raw_defaults.get("tensor_parallel_size"),
             label=f"{resolved_path} worker_defaults.tensor_parallel_size",
         ),
+        pipeline_parallel_size=_parse_optional_positive_int(
+            raw_defaults.get("pipeline_parallel_size"),
+            label=f"{resolved_path} worker_defaults.pipeline_parallel_size",
+        ),
         data_parallel_size=_parse_optional_positive_int(
             raw_defaults.get("data_parallel_size"),
             label=f"{resolved_path} worker_defaults.data_parallel_size",
@@ -182,6 +189,10 @@ def parse_model_deployment(path: str | Path) -> ModelDeploymentSpec:
                 tensor_parallel_size=_parse_optional_positive_int(
                     raw_worker.get("tensor_parallel_size"),
                     label=f"{resolved_path} workers[{idx}].tensor_parallel_size",
+                ),
+                pipeline_parallel_size=_parse_optional_positive_int(
+                    raw_worker.get("pipeline_parallel_size"),
+                    label=f"{resolved_path} workers[{idx}].pipeline_parallel_size",
                 ),
                 data_parallel_size=_parse_optional_positive_int(
                     raw_worker.get("data_parallel_size"),
@@ -341,6 +352,12 @@ def resolve_model_deployment(
         if tensor_parallel_size is None:
             tensor_parallel_size = len(worker.gpus) if worker.gpus else 1
 
+        pipeline_parallel_size = worker.pipeline_parallel_size
+        if pipeline_parallel_size is None:
+            pipeline_parallel_size = spec.worker_defaults.pipeline_parallel_size
+        if pipeline_parallel_size is None:
+            pipeline_parallel_size = 1
+
         data_parallel_size = worker.data_parallel_size
         if data_parallel_size is None:
             data_parallel_size = spec.worker_defaults.data_parallel_size
@@ -351,22 +368,32 @@ def resolve_model_deployment(
             raise ValueError(
                 f"Deployment config {spec.source_path} worker {worker_index} tensor_parallel_size must be positive"
             )
+        if pipeline_parallel_size <= 0:
+            raise ValueError(
+                f"Deployment config {spec.source_path} worker {worker_index} pipeline_parallel_size must be positive"
+            )
         if data_parallel_size <= 0:
             raise ValueError(
                 f"Deployment config {spec.source_path} worker {worker_index} data_parallel_size must be positive"
             )
 
-        required_gpu_count = tensor_parallel_size * data_parallel_size
+        required_gpu_count = tensor_parallel_size * pipeline_parallel_size * data_parallel_size
 
         if family.accelerator == "nvidia" and required_gpu_count > len(worker.gpus):
             raise ValueError(
                 f"Deployment config {spec.source_path} worker {worker_index} "
-                f"tensor_parallel_size * data_parallel_size ({tensor_parallel_size} * {data_parallel_size} = "
+                "tensor_parallel_size * pipeline_parallel_size * data_parallel_size "
+                f"({tensor_parallel_size} * {pipeline_parallel_size} * {data_parallel_size} = "
                 f"{required_gpu_count}) exceeds assigned GPU count ({len(worker.gpus)})"
             )
         if family.accelerator == "none" and tensor_parallel_size != 1:
             raise ValueError(
                 f"Deployment config {spec.source_path} worker {worker_index} must use tensor_parallel_size=1 "
+                "for non-GPU model families"
+            )
+        if family.accelerator == "none" and pipeline_parallel_size != 1:
+            raise ValueError(
+                f"Deployment config {spec.source_path} worker {worker_index} must use pipeline_parallel_size=1 "
                 "for non-GPU model families"
             )
         if family.accelerator == "none" and data_parallel_size != 1:
@@ -390,6 +417,7 @@ def resolve_model_deployment(
             ResolvedDeploymentWorker(
                 gpus=worker.gpus,
                 tensor_parallel_size=tensor_parallel_size,
+                pipeline_parallel_size=pipeline_parallel_size,
                 data_parallel_size=data_parallel_size,
                 expert_parallel_enabled=expert_parallel_enabled,
             )
@@ -531,9 +559,12 @@ def render_model_compose(
             command.append("--enable-expert-parallel")
         if resolved.family.accelerator == "nvidia":
             command.append(f"--tensor-parallel-size={worker.tensor_parallel_size}")
+            command.append(f"--pipeline-parallel-size={worker.pipeline_parallel_size}")
             command.append(f"--data-parallel-size={worker.data_parallel_size}")
         elif worker.tensor_parallel_size != 1:
             command.append(f"--tensor-parallel-size={worker.tensor_parallel_size}")
+        elif worker.pipeline_parallel_size != 1:
+            command.append(f"--pipeline-parallel-size={worker.pipeline_parallel_size}")
         elif worker.data_parallel_size != 1:
             command.append(f"--data-parallel-size={worker.data_parallel_size}")
         if command:
@@ -603,6 +634,7 @@ def create_wizard_model_deployment(
     gpu_architecture = "default"
     worker_groups: list[tuple[int, ...]] = [tuple()]
     tensor_parallel_size: int | None = None
+    pipeline_parallel_size: int | None = None
     data_parallel_size: int | None = None
     expert_parallel_enabled = False
 
@@ -645,6 +677,15 @@ def create_wizard_model_deployment(
             print("Please enter a positive integer or leave empty.")
 
         while True:
+            raw_pp = input("Set default pipeline parallel size [default: 1]: ").strip()
+            if not raw_pp:
+                break
+            if raw_pp.isdigit() and int(raw_pp) > 0:
+                pipeline_parallel_size = int(raw_pp)
+                break
+            print("Please enter a positive integer or leave empty.")
+
+        while True:
             raw_dp = input("Set default data parallel size [default: 1]: ").strip()
             if not raw_dp:
                 break
@@ -666,6 +707,7 @@ def create_wizard_model_deployment(
         router="auto",
         worker_groups=worker_groups,
         tensor_parallel_size=tensor_parallel_size,
+        pipeline_parallel_size=pipeline_parallel_size,
         data_parallel_size=data_parallel_size,
         expert_parallel_enabled=expert_parallel_enabled,
     )
@@ -684,6 +726,7 @@ def render_model_deployment_toml(
     router: str,
     worker_groups: list[tuple[int, ...]],
     tensor_parallel_size: int | None,
+    pipeline_parallel_size: int | None,
     data_parallel_size: int | None,
     expert_parallel_enabled: bool,
 ) -> str:
@@ -700,6 +743,8 @@ def render_model_deployment_toml(
 
     if tensor_parallel_size is not None:
         lines.append(f"tensor_parallel_size = {tensor_parallel_size}")
+    if pipeline_parallel_size not in (None, 1):
+        lines.append(f"pipeline_parallel_size = {pipeline_parallel_size}")
     if data_parallel_size not in (None, 1):
         lines.append(f"data_parallel_size = {data_parallel_size}")
     if expert_parallel_enabled:
@@ -886,6 +931,18 @@ def model_deployment_summary(spec: ModelDeploymentSpec) -> str:
     else:
         tensor_parallel = "mixed"
 
+    pipeline_parallel_values = [
+        worker.pipeline_parallel_size for worker in spec.workers if worker.pipeline_parallel_size is not None
+    ]
+    if spec.worker_defaults.pipeline_parallel_size is not None:
+        pipeline_parallel = str(spec.worker_defaults.pipeline_parallel_size)
+    elif not pipeline_parallel_values:
+        pipeline_parallel = "1"
+    elif len(set(pipeline_parallel_values)) == 1:
+        pipeline_parallel = str(pipeline_parallel_values[0])
+    else:
+        pipeline_parallel = "mixed"
+
     data_parallel_values = [
         worker.data_parallel_size for worker in spec.workers if worker.data_parallel_size is not None
     ]
@@ -916,6 +973,7 @@ def model_deployment_summary(spec: ModelDeploymentSpec) -> str:
         f"gpu_architecture={spec.gpu_architecture}, "
         f"workers={worker_groups}, "
         f"tp={tensor_parallel}, "
+        f"pp={pipeline_parallel}, "
         f"dp={data_parallel}, "
         f"expert_parallel={expert_parallel}"
     )
