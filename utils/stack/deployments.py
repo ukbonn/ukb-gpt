@@ -382,3 +382,14 @@ def _render_resolved_model_deployments(
         rendered_paths[deployment.role] = resolved_path
     _cleanup_generated_model_compose_files(active_paths, root_dir=root_dir)
     return rendered_paths
+
+
+def ensure_rendered_model_deployments(
+    resolved_deployments: tuple[ResolvedModelDeployment, ...],
+    *,
+    root_dir: str | Path,
+) -> None:
+    _render_resolved_model_deployments(
+        resolved_deployments,
+        root_dir=root_dir,
+    )

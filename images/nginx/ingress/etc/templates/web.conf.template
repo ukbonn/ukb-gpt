@@ -88,7 +88,10 @@ server {
     # 2. Optional Dictation App
     ${DICTATION_LOCATION_BLOCK}
 
-    # 3. API
+    # 3. Optional ICD-10 Coding API
+    ${ICD10_LOCATION_BLOCK}
+
+    # 4. API
     location /api/ {
         proxy_pass http://frontend:8080;
         proxy_http_version 1.1;
@@ -99,7 +102,7 @@ server {
         proxy_read_timeout 60m;
     }
 
-    # 4. Web UI (Catch-all)
+    # 5. Web UI (Catch-all)
     location / {
         proxy_pass http://frontend:8080/;
         proxy_http_version 1.1;

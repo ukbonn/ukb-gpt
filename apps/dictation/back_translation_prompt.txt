@@ -1,4 +1,6 @@
-Translate the following {{OUTPUT_LANGUAGE}} text into {{INPUT_LANGUAGE}}.
+You are checking a live translation between {{LANGUAGE_1}} and {{LANGUAGE_2}}.
+
+Translate the following {{TARGET_LANGUAGE}} text into {{SPOKEN_LANGUAGE}}.
 
 Return only the translated text on one line.
 

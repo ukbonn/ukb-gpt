@@ -8,6 +8,7 @@ set -e
 BATCH_CLIENT_MODE_ON="${BATCH_CLIENT_MODE_ON:-false}"
 ENABLE_INTERNAL_METRICS="${ENABLE_INTERNAL_METRICS:-false}"
 ENABLE_DICTATION_APP="${ENABLE_DICTATION_APP:-false}"
+ENABLE_ICD_10_CODING_APP="${ENABLE_ICD_10_CODING_APP:-false}"
 ENABLE_COHORT_FEASIBILITY_APP="${ENABLE_COHORT_FEASIBILITY_APP:-false}"
 ENABLE_METRICS_FORWARDING="${ENABLE_METRICS_FORWARDING:-false}"
 BYPASS_ROUTER="${BYPASS_ROUTER:-true}"
@@ -71,6 +72,33 @@ if [ "$ENABLE_DICTATION_APP" = "true" ] && [ "$BATCH_CLIENT_MODE_ON" != "true" ]
 else
     echo "[Ingress Configurer] Mode: Dictation App Route DISABLED."
     export DICTATION_LOCATION_BLOCK=""
+fi
+
+if [ "$ENABLE_ICD_10_CODING_APP" = "true" ] && [ "$BATCH_CLIENT_MODE_ON" != "true" ]; then
+    echo "[Ingress Configurer] Mode: ICD-10 Coding Route ENABLED (/api/v1/icd10/)."
+    export ICD10_LOCATION_BLOCK='
+    location = /api/v1/icd10 {
+        return 307 /api/v1/icd10/status;
+    }
+
+    location /api/v1/icd10/ {
+        proxy_pass http://icd_10_coding:8091;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header Authorization $http_authorization;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_buffering off;
+        proxy_connect_timeout 60s;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+    }'
+else
+    echo "[Ingress Configurer] Mode: ICD-10 Coding Route DISABLED."
+    export ICD10_LOCATION_BLOCK=""
 fi
 
 if [ "$ENABLE_COHORT_FEASIBILITY_APP" = "true" ] && [ "$BATCH_CLIENT_MODE_ON" = "true" ]; then
@@ -422,7 +450,7 @@ else
     rm -f "$METRICS_TUNNEL_FILE"
 fi
 
-VARS_FOR_NGINX='$SERVER_NAME$NGINX_ACL_ALLOW_LIST$GRAFANA_LOCATION_BLOCK$DICTATION_LOCATION_BLOCK$COHORT_FEASIBILITY_LOCATION_BLOCK$BATCH_CLIENT_LISTEN_PORT'
+VARS_FOR_NGINX='$SERVER_NAME$NGINX_ACL_ALLOW_LIST$GRAFANA_LOCATION_BLOCK$DICTATION_LOCATION_BLOCK$ICD10_LOCATION_BLOCK$COHORT_FEASIBILITY_LOCATION_BLOCK$BATCH_CLIENT_LISTEN_PORT'
 
 # Substitute all remaining variables into the chosen template
 envsubst "$VARS_FOR_NGINX" \

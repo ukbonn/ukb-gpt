@@ -2,15 +2,25 @@ import asyncio
 import audioop
 import base64
 import json
+import mimetypes
 import os
 import re
 import tempfile
 import uuid
 import urllib.request
 import wave
+from dataclasses import dataclass
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote
+
+from apps.common.stt_contract import (
+    CONVERSATION_LANGUAGE_CHOICES,
+    StructuredTranscription,
+    canonicalize_conversation_language,
+    parse_structured_transcription,
+    transcription_response_format,
+)
 
 try:
     import websockets
@@ -84,16 +94,51 @@ DICTATION_TTS_RESPONSE_FORMAT = (
     os.getenv("DICTATION_TTS_RESPONSE_FORMAT", "wav").strip().lower() or "wav"
 )
 DICTATION_TTS_TIMEOUT_SECONDS = int(os.getenv("DICTATION_TTS_TIMEOUT_SECONDS", "300"))
+DICTATION_TTS_SUPPORTED_LANGUAGES = (
+    "English",
+    "French",
+    "Spanish",
+    "German",
+    "Italian",
+    "Portuguese",
+    "Dutch",
+    "Arabic",
+    "Hindi",
+)
+DICTATION_DEFAULT_LANGUAGE_1 = canonicalize_conversation_language(
+    os.getenv("DICTATION_DEFAULT_LANGUAGE_1", "German"),
+    "German",
+)
+DICTATION_DEFAULT_LANGUAGE_2 = canonicalize_conversation_language(
+    os.getenv("DICTATION_DEFAULT_LANGUAGE_2", "Arabic"),
+    "Arabic",
+)
+RTL_LANGUAGE_NAMES = {
+    "arabic",
+    "ar",
+    "farsi",
+    "fa",
+    "persian",
+    "hebrew",
+    "iw",
+    "he",
+    "urdu",
+    "ur",
+}
 
-_DEFAULT_TRANSCRIPTION_PROMPT = """Transcribe the following speech segment in {{INPUT_LANGUAGE}} into {{OUTPUT_LANGUAGE}} text.
+_DEFAULT_TRANSCRIPTION_PROMPT = """You receive an audio segment from a live conversation in a German university hospital between one {{LANGUAGE_1}} speaker and one {{LANGUAGE_2}} speaker.
 
-Follow these specific instructions for formatting the answer:
-* Only output the transcription, with no newlines.
-* When transcribing numbers, write the digits, i.e. write 1.7 and not one point seven, and write 3 instead of three.
-* The user that sent the segment works in a medical facility, so if you are not sure about words consider a clinical context.
+Return structured JSON only.
+Rules:
+* spoken_language must be exactly "{{LANGUAGE_1}}" or "{{LANGUAGE_2}}".
+* transcription must be a one-line verbatim transcription in the spoken language.
+* Use digits for numbers and dates.
+* If the audio is ambiguous, prefer medical wording.
 """
 
-_DEFAULT_BACK_TRANSLATION_PROMPT = """Translate the following {{OUTPUT_LANGUAGE}} text into {{INPUT_LANGUAGE}}.
+_DEFAULT_BACK_TRANSLATION_PROMPT = """You are checking a live translation between {{LANGUAGE_1}} and {{LANGUAGE_2}}.
+
+Translate the following {{TARGET_LANGUAGE}} text into {{SPOKEN_LANGUAGE}}.
 
 Return only the translated text on one line.
 
@@ -106,6 +151,14 @@ Return only the translated text on one line.
 {{TEXT}}"""
 
 _FINAL_ANSWER_MARKER = "FINAL_ANSWER:"
+
+
+@dataclass
+class ConversationTurnResult:
+    translation_text: str
+    transcript_text: str
+    spoken_language: str
+    target_language: str
 
 
 def _extract_transcript(raw_payload: str) -> str:
@@ -357,6 +410,117 @@ def _extract_final_answer(raw_text: str) -> str:
     return lines[-1]
 
 
+def language_is_rtl(language: str) -> bool:
+    normalized = (language or "").strip().casefold()
+    return normalized in RTL_LANGUAGE_NAMES
+
+
+def tts_language_is_supported(language: str) -> bool:
+    normalized = (language or "").strip().casefold()
+    if not normalized:
+        return False
+    return normalized in {
+        supported_language.casefold()
+        for supported_language in DICTATION_TTS_SUPPORTED_LANGUAGES
+    }
+
+
+def _normalize_language_choice(raw_language: str, fallback: str) -> str:
+    return canonicalize_conversation_language(raw_language, fallback)
+
+
+def _template_replacements(
+    *,
+    language_1: str,
+    language_2: str,
+    spoken_language: str = "",
+    target_language: str = "",
+    text: str = "",
+) -> dict[str, str]:
+    resolved_language_1 = _normalize_language_choice(
+        language_1, DICTATION_DEFAULT_LANGUAGE_1
+    )
+    resolved_language_2 = _normalize_language_choice(
+        language_2, DICTATION_DEFAULT_LANGUAGE_2
+    )
+    resolved_spoken = _normalize_language_choice(
+        spoken_language, resolved_language_1
+    )
+    resolved_target = _normalize_language_choice(
+        target_language,
+        resolved_language_2 if resolved_spoken.casefold() == resolved_language_1.casefold() else resolved_language_1,
+    )
+    return {
+        "{{LANGUAGE_1}}": resolved_language_1,
+        "{{LANGUAGE_2}}": resolved_language_2,
+        "{{SPOKEN_LANGUAGE}}": resolved_spoken,
+        "{{TARGET_LANGUAGE}}": resolved_target,
+        "{{TARGET_LANGAUGE}}": resolved_target,
+        "{{INPUT_LANGUAGE}}": resolved_spoken,
+        "{{OUTPUT_LANGUAGE}}": resolved_target,
+        "{{TEXT}}": text,
+    }
+
+
+def _extract_marked_line(raw_text: str, marker: str) -> str:
+    matches = re.findall(rf"(?im)^\s*{re.escape(marker)}\s*(.+?)\s*$", raw_text or "")
+    return matches[-1].strip() if matches else ""
+
+
+def _normalize_detected_spoken_language(
+    detected_language: str, language_1: str, language_2: str
+) -> str:
+    detected = canonicalize_conversation_language(
+        detected_language,
+        _normalize_language_choice(language_1, DICTATION_DEFAULT_LANGUAGE_1),
+    )
+    candidate_1 = _normalize_language_choice(language_1, DICTATION_DEFAULT_LANGUAGE_1)
+    candidate_2 = _normalize_language_choice(language_2, DICTATION_DEFAULT_LANGUAGE_2)
+    if detected.casefold() == candidate_1.casefold():
+        return candidate_1
+    if detected.casefold() == candidate_2.casefold():
+        return candidate_2
+    return candidate_1
+
+
+def _resolve_target_language(
+    spoken_language: str, language_1: str, language_2: str
+) -> str:
+    resolved_language_1 = _normalize_language_choice(
+        language_1, DICTATION_DEFAULT_LANGUAGE_1
+    )
+    resolved_language_2 = _normalize_language_choice(
+        language_2, DICTATION_DEFAULT_LANGUAGE_2
+    )
+    if spoken_language.casefold() == resolved_language_1.casefold():
+        return resolved_language_2
+    if spoken_language.casefold() == resolved_language_2.casefold():
+        return resolved_language_1
+    return resolved_language_2
+
+
+def resolve_target_language(spoken_language: str, language_1: str, language_2: str) -> str:
+    return _resolve_target_language(spoken_language, language_1, language_2)
+
+
+def _parse_structured_transcription_response(
+    raw_text: str,
+    language_1: str,
+    language_2: str,
+) -> StructuredTranscription:
+    parsed = parse_structured_transcription(raw_text)
+    spoken_language = _normalize_detected_spoken_language(
+        parsed.spoken_language.value,
+        language_1,
+        language_2,
+    )
+    transcription = apply_post_processing(parsed.transcription)
+    return StructuredTranscription(
+        spoken_language=spoken_language,
+        transcription=transcription,
+    )
+
+
 def _language_descriptor(raw_language: str, *, fallback: str) -> str:
     language = (raw_language or "").strip()
     return language if language else fallback
@@ -372,7 +536,11 @@ def _output_language_matches_input(input_language: str, output_language: str) ->
 
 def _stt_model_supports_prompted_multilingual_output() -> bool:
     lowered = STT_MODEL.lower()
-    return "gemma-4-e4b" in lowered
+    return "gemma-4-e4b" in lowered or "gemma-4-e2b" in lowered
+
+
+def dictation_supports_live_streaming() -> bool:
+    return _stt_model_supports_prompted_multilingual_output()
 
 
 def _normalize_translation_base_url() -> str:
@@ -392,7 +560,7 @@ def _normalize_tts_base_url() -> str:
 def _translation_api_headers() -> dict[str, str]:
     headers = {
         "Content-Type": "application/json",
-        "Accept": "text/event-stream",
+        "Accept": "application/json",
     }
     if DICTATION_TRANSLATION_API_KEY:
         headers["Authorization"] = f"Bearer {DICTATION_TRANSLATION_API_KEY}"
@@ -462,24 +630,30 @@ def _resolve_tts_model() -> str:
 
 
 def _build_transcription_prompt(input_language: str, output_language: str) -> str:
+    spoken_language = _normalize_language_choice(input_language, DICTATION_DEFAULT_LANGUAGE_1)
+    desired_language = _normalize_language_choice(output_language, spoken_language)
+    return (
+        f"Provide a verbatim, word-for-word transcription of the audio in {desired_language}. "
+        "Output only the transcription on one line. Use digits for numbers and dates. "
+        "If the audio is ambiguous, prefer medical wording."
+    )
+
+
+def _build_conversation_transcription_prompt(language_1: str, language_2: str) -> str:
     template = _load_prompt_template(
         DICTATION_TRANSCRIPTION_PROMPT_PATH,
         _DEFAULT_TRANSCRIPTION_PROMPT,
     )
     prompt = _render_prompt_template(
         template,
-        {
-            "{{INPUT_LANGUAGE}}": _language_descriptor(
-                input_language,
-                fallback="the spoken language in the audio",
-            ),
-            "{{OUTPUT_LANGUAGE}}": _language_descriptor(
-                output_language,
-                fallback="the same language as the speaker",
-            ),
-        },
-    )
-    return _with_final_answer_contract(prompt)
+        _template_replacements(
+            language_1=language_1,
+            language_2=language_2,
+            spoken_language=language_1,
+            target_language=language_2,
+        ),
+    ).strip()
+    return prompt
 
 
 def _build_translation_prompt(text: str, input_language: str, output_language: str) -> str:
@@ -489,31 +663,24 @@ def _build_translation_prompt(text: str, input_language: str, output_language: s
     )
     prompt = _render_prompt_template(
         template,
-        {
-            "{{TEXT}}": text,
-            "{{INPUT_LANGUAGE}}": _language_descriptor(
-                input_language,
-                fallback="the original source language",
-            ),
-            "{{OUTPUT_LANGUAGE}}": _language_descriptor(
-                output_language,
-                fallback="the requested target language",
-            ),
-            "{{TARGET_LANGAUGE}}": _language_descriptor(
-                output_language,
-                fallback="the requested target language",
-            ),
-            "{{TARGET_LANGUAGE}}": _language_descriptor(
-                output_language,
-                fallback="the requested target language",
-            ),
-        },
+        _template_replacements(
+            language_1=input_language,
+            language_2=output_language,
+            spoken_language=input_language,
+            target_language=output_language,
+            text=text,
+        ),
     )
     return _with_final_answer_contract(prompt)
 
 
 def _build_back_translation_prompt(
-    text: str, input_language: str, output_language: str
+    text: str,
+    input_language: str,
+    output_language: str,
+    *,
+    language_1: str = "",
+    language_2: str = "",
 ) -> str:
     template_path = DICTATION_BACK_TRANSLATION_PROMPT_PATH
     if template_path.exists():
@@ -528,35 +695,23 @@ def _build_back_translation_prompt(
         )
     prompt = _render_prompt_template(
         template,
-        {
-            "{{TEXT}}": text,
-            "{{INPUT_LANGUAGE}}": _language_descriptor(
-                input_language,
-                fallback="the speaker's source language",
-            ),
-            "{{OUTPUT_LANGUAGE}}": _language_descriptor(
-                output_language,
-                fallback="the transcript language",
-            ),
-            "{{TARGET_LANGAUGE}}": _language_descriptor(
-                input_language,
-                fallback="the speaker's source language",
-            ),
-            "{{TARGET_LANGUAGE}}": _language_descriptor(
-                input_language,
-                fallback="the speaker's source language",
-            ),
-        },
+        _template_replacements(
+            language_1=language_1 or input_language,
+            language_2=language_2 or output_language,
+            spoken_language=input_language,
+            target_language=output_language,
+            text=text,
+        ),
     )
     return _with_final_answer_contract(prompt)
 
 
-def _run_llm_prompt(prompt: str, model: str) -> str:
+def _run_llm_prompt(prompt: str, model: str, *, enable_thinking: bool = False) -> str:
     payload = {
         "model": model,
         "messages": [{"role": "user", "content": prompt}],
         "stream": False,
-        "chat_template_kwargs": {"enable_thinking": True},
+        "chat_template_kwargs": {"enable_thinking": bool(enable_thinking)},
     }
     request = urllib.request.Request(
         f"{_normalize_translation_base_url()}/chat/completions",
@@ -620,6 +775,187 @@ def _read_pcm16_audio(path: Path) -> bytes:
     return pcm16
 
 
+def _audio_content_type_for_path(path: Path) -> str:
+    suffix = path.suffix.lower()
+    if suffix == ".webm":
+        return "audio/webm"
+    if suffix == ".wav":
+        return "audio/wav"
+    guessed, _ = mimetypes.guess_type(path.name)
+    if guessed:
+        return guessed
+    return "application/octet-stream"
+
+
+def _audio_format_for_path(path: Path) -> str:
+    suffix = path.suffix.lower().lstrip(".")
+    if suffix:
+        return suffix
+    content_type = _audio_content_type_for_path(path)
+    if "/" in content_type:
+        subtype = content_type.split("/", 1)[1].strip().lower()
+        if subtype:
+            return subtype
+    return "wav"
+
+
+def _audio_input_item(
+    *,
+    media_uuid: str | None,
+    audio_bytes: bytes | None,
+    audio_format: str,
+) -> dict[str, object]:
+    item: dict[str, object] = {"type": "input_audio"}
+    if media_uuid:
+        item["uuid"] = media_uuid
+    if audio_bytes is not None:
+        item["input_audio"] = {
+            "data": base64.b64encode(audio_bytes).decode("ascii"),
+            "format": audio_format,
+        }
+    return item
+
+
+def _load_audio_bytes(path: Path) -> bytes:
+    if not path.is_file():
+        raise RuntimeError(f"Audio file was not found: {path}")
+    if path.stat().st_size > MAX_AUDIO_BYTES:
+        max_mb = MAX_AUDIO_BYTES // (1024 * 1024)
+        raise RuntimeError(f"Audio file is too large. Limit is {max_mb} MB.")
+    audio_bytes = path.read_bytes()
+    if not audio_bytes:
+        raise RuntimeError("Audio appears to be empty.")
+    return audio_bytes
+
+
+def _run_structured_transcription_request(
+    *,
+    content: list[dict[str, object]],
+    language_1: str,
+    language_2: str,
+    request_name: str,
+) -> StructuredTranscription:
+    payload = {
+        "model": STT_MODEL,
+        "messages": [{"role": "user", "content": content}],
+        "stream": False,
+        "temperature": 0.0,
+        "chat_template_kwargs": {"enable_thinking": False},
+        "response_format": transcription_response_format(request_name),
+    }
+
+    request = urllib.request.Request(
+        f"{STT_BASE_URL}/chat/completions",
+        data=json.dumps(payload).encode("utf-8"),
+        method="POST",
+        headers={
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            **({"Authorization": f"Bearer {STT_API_KEY}"} if STT_API_KEY else {}),
+        },
+    )
+    with urllib.request.urlopen(request, timeout=REQUEST_TIMEOUT_SECONDS) as response:
+        response_payload = json.loads(response.read().decode("utf-8", errors="replace"))
+
+    if not isinstance(response_payload, dict):
+        raise RuntimeError("STT chat backend returned an invalid JSON payload.")
+
+    raw_content = _extract_message_content(response_payload)
+    return _parse_structured_transcription_response(raw_content, language_1, language_2)
+
+
+def transcribe_conversation_audio(
+    audio_path: str,
+    language_1: str,
+    language_2: str,
+) -> StructuredTranscription:
+    path = Path(audio_path)
+    audio_bytes = _load_audio_bytes(path)
+    content = [
+        _audio_input_item(
+            media_uuid=None,
+            audio_bytes=audio_bytes,
+            audio_format=_audio_format_for_path(path),
+        ),
+        {
+            "type": "text",
+            "text": _build_conversation_transcription_prompt(language_1, language_2),
+        },
+    ]
+    return _run_structured_transcription_request(
+        content=content,
+        language_1=language_1,
+        language_2=language_2,
+        request_name="conversation_transcription",
+    )
+
+
+def transcribe_live_audio_chunk(
+    audio_path: str,
+    language_1: str,
+    language_2: str,
+    *,
+    previous_chunk_uuids: list[str] | None = None,
+    chunk_uuid: str | None = None,
+) -> StructuredTranscription:
+    if not _stt_model_supports_prompted_multilingual_output():
+        raise RuntimeError("Live chunk transcription requires a Gemma multimodal STT model.")
+
+    path = Path(audio_path)
+    audio_bytes = _load_audio_bytes(path)
+    content: list[dict[str, object]] = []
+    for cached_uuid in previous_chunk_uuids or []:
+        content.append(
+            _audio_input_item(
+                media_uuid=cached_uuid,
+                audio_bytes=None,
+                audio_format=_audio_format_for_path(path),
+            )
+        )
+    content.append(
+        _audio_input_item(
+            media_uuid=chunk_uuid,
+            audio_bytes=audio_bytes,
+            audio_format=_audio_format_for_path(path),
+        )
+    )
+    content.append(
+        {
+            "type": "text",
+            "text": _build_conversation_transcription_prompt(language_1, language_2),
+        }
+    )
+    return _run_structured_transcription_request(
+        content=content,
+        language_1=language_1,
+        language_2=language_2,
+        request_name="live_conversation_transcription",
+    )
+
+
+def transcribe_conversation_file(
+    audio_path: str,
+    language_1: str,
+    language_2: str,
+) -> StructuredTranscription:
+    if (
+        _stt_model_supports_prompted_multilingual_output()
+        and language_1.casefold() != language_2.casefold()
+    ):
+        return transcribe_conversation_audio(audio_path, language_1, language_2)
+
+    transcript_text = apply_post_processing(
+        _transcribe_file(
+            audio_path,
+            prompt=_build_transcription_prompt(language_1, language_1),
+        )
+    )
+    return StructuredTranscription(
+        spoken_language=language_1,
+        transcription=transcript_text,
+    )
+
+
 def _transcribe_file_http(audio_path: str, prompt: str = "") -> str:
     path = Path(audio_path)
     if not path.is_file():
@@ -648,7 +984,7 @@ def _transcribe_file_http(audio_path: str, prompt: str = "") -> str:
     body += f"--{boundary}\r\n".encode("utf-8")
     body += (
         f'Content-Disposition: form-data; name="file"; filename="{path.name}"\r\n'
-        "Content-Type: audio/wav\r\n\r\n"
+        f"Content-Type: {_audio_content_type_for_path(path)}\r\n\r\n"
     ).encode("utf-8")
     body += audio_bytes
     body += b"\r\n"
@@ -776,7 +1112,11 @@ def _transcribe_file(audio_path: str, prompt: str = "") -> str:
 
 
 def _stream_translation_to_output(
-    source_text: str, input_language: str, output_language: str
+    source_text: str,
+    input_language: str,
+    output_language: str,
+    *,
+    enable_thinking: bool = False,
 ):
     if not source_text:
         yield ""
@@ -793,7 +1133,7 @@ def _stream_translation_to_output(
 
     prompt = _build_translation_prompt(source_text, input_language, output_language)
     try:
-        translated = _run_llm_prompt(prompt, model)
+        translated = _run_llm_prompt(prompt, model, enable_thinking=enable_thinking)
         if translated:
             yield translated
         else:
@@ -808,8 +1148,35 @@ def _stream_translation_to_output(
         yield f"Translation failed: {exc}"
 
 
+def translate_to_target(
+    text: str,
+    input_language: str,
+    output_language: str,
+    *,
+    enable_thinking: bool = False,
+):
+    text = (text or "").strip()
+    input_language = (input_language or "").strip()
+    output_language = (output_language or "").strip()
+    if not text:
+        yield "Nothing to translate yet."
+        return
+    for translated_text in _stream_translation_to_output(
+        text,
+        input_language,
+        output_language,
+        enable_thinking=enable_thinking,
+    ):
+        yield translated_text
+
+
 def _stream_back_translation(
-    text: str, input_language: str, output_language: str
+    text: str,
+    input_language: str,
+    output_language: str,
+    *,
+    language_1: str = "",
+    language_2: str = "",
 ):
     if not text:
         yield "No output text to verify."
@@ -832,7 +1199,13 @@ def _stream_back_translation(
         yield f"Back-translation unavailable: {exc}"
         return
 
-    prompt = _build_back_translation_prompt(text, input_language, output_language)
+    prompt = _build_back_translation_prompt(
+        text,
+        input_language,
+        output_language,
+        language_1=language_1 or input_language,
+        language_2=language_2 or output_language,
+    )
     try:
         translated = _run_llm_prompt(prompt, model)
         if translated:
@@ -873,6 +1246,12 @@ def speak_translation(text: str, target_language: str) -> tuple[str, str | None]
         return "Read-aloud unavailable: no output text to speak.", None
     if not DICTATION_TTS_BASE_URL:
         return "Read-aloud unavailable: missing DICTATION_TTS_BASE_URL or TTS_ENDPOINT.", None
+    if target_language and not tts_language_is_supported(target_language):
+        supported = ", ".join(DICTATION_TTS_SUPPORTED_LANGUAGES)
+        return (
+            f"Read-aloud unavailable for {target_language}. Supported languages: {supported}.",
+            None,
+        )
 
     try:
         model = _resolve_tts_model()
@@ -912,69 +1291,138 @@ def speak_translation(text: str, target_language: str) -> tuple[str, str | None]
 
 
 def transcribe_and_translate(
-    audio_path: str | None, input_language: str, output_language: str
+    audio_path: str | None,
+    input_language: str,
+    output_language: str,
+    *,
+    enable_thinking: bool = False,
 ):
     if not audio_path:
         yield "Record or upload audio first.", ""
         return
 
-    input_language = (input_language or "").strip()
-    output_language = (output_language or "").strip()
-    same_language_output = _output_language_matches_input(input_language, output_language)
-    direct_multilingual = (
-        _stt_model_supports_prompted_multilingual_output() and not same_language_output
+    normalized_language_1 = _normalize_language_choice(
+        input_language, DICTATION_DEFAULT_LANGUAGE_1
+    )
+    normalized_language_2 = _normalize_language_choice(
+        output_language or normalized_language_1,
+        DICTATION_DEFAULT_LANGUAGE_2 if output_language else normalized_language_1,
     )
 
     try:
-        if direct_multilingual or same_language_output:
-            desired_output_language = output_language if output_language else input_language
-            transcription_prompt = _build_transcription_prompt(
-                input_language,
-                desired_output_language,
-            )
-            primary_text = _transcribe_file(audio_path, prompt=transcription_prompt)
-            primary_text = apply_post_processing(primary_text)
-        else:
-            transcript = _transcribe_file(audio_path)
-            primary_text = apply_post_processing(transcript)
+        transcription = transcribe_conversation_file(
+            audio_path,
+            normalized_language_1,
+            normalized_language_2,
+        )
     except Exception as exc:
         yield f"Transcription failed: {exc}", ""
         return
 
-    if same_language_output:
-        yield primary_text, ""
+    transcript_text = transcription.transcription
+    spoken_language = _normalize_detected_spoken_language(
+        transcription.spoken_language,
+        normalized_language_1,
+        normalized_language_2,
+    )
+    target_language = _resolve_target_language(
+        spoken_language,
+        normalized_language_1,
+        normalized_language_2,
+    )
+
+    if target_language.casefold() == spoken_language.casefold():
+        yield transcript_text, transcript_text
         return
 
-    if not direct_multilingual:
-        translated_text = ""
-        for translated in _stream_translation_to_output(
-            primary_text, input_language, output_language
-        ):
-            translated_text = translated
-            if translated.startswith("Translation failed:") or translated.startswith(
-                "Translation unavailable:"
-            ):
-                yield primary_text, translated
-                return
-            yield translated_text, ""
-        if translated_text:
-            primary_text = translated_text
-
-    yield primary_text, "Back-translating for verification..."
-    for verification in _stream_back_translation(
-        primary_text,
-        input_language,
-        output_language,
+    translated_text = ""
+    for translated in _stream_translation_to_output(
+        transcript_text,
+        spoken_language,
+        target_language,
+        enable_thinking=enable_thinking,
     ):
-        yield primary_text, verification
+        translated_text = translated
+
+    if not translated_text:
+        yield "Translation unavailable: empty response from LLM.", transcript_text
+        return
+
+    yield translated_text, transcript_text
+
+
+def run_conversation_turn(
+    audio_path: str | None,
+    language_1: str,
+    language_2: str,
+    *,
+    enable_thinking: bool = False,
+) -> ConversationTurnResult:
+    return run_conversation_audio_translation(
+        audio_path,
+        language_1,
+        language_2,
+        enable_thinking=enable_thinking,
+    )
+
+
+def run_conversation_audio_translation(
+    audio_path: str | None,
+    language_1: str,
+    language_2: str,
+    *,
+    enable_thinking: bool = False,
+) -> ConversationTurnResult:
+    if not audio_path:
+        raise RuntimeError("Record or upload audio first.")
+
+    normalized_language_1 = _normalize_language_choice(
+        language_1, DICTATION_DEFAULT_LANGUAGE_1
+    )
+    normalized_language_2 = _normalize_language_choice(
+        language_2, DICTATION_DEFAULT_LANGUAGE_2
+    )
+
+    transcription = transcribe_conversation_file(
+        audio_path,
+        normalized_language_1,
+        normalized_language_2,
+    )
+    transcript_text = transcription.transcription
+    spoken_language = _normalize_detected_spoken_language(
+        transcription.spoken_language,
+        normalized_language_1,
+        normalized_language_2,
+    )
+    target_language = _resolve_target_language(
+        spoken_language,
+        normalized_language_1,
+        normalized_language_2,
+    )
+    if target_language.casefold() == spoken_language.casefold():
+        translation_text = transcript_text
+    else:
+        translation_text = ""
+        for translation_text in translate_to_target(
+            transcript_text,
+            spoken_language,
+            target_language,
+            enable_thinking=enable_thinking,
+        ):
+            pass
+        if translation_text.startswith("Translation failed:") or translation_text.startswith(
+            "Translation unavailable:"
+        ):
+            raise RuntimeError(translation_text)
+
+    return ConversationTurnResult(
+        translation_text=translation_text,
+        transcript_text=transcript_text,
+        spoken_language=spoken_language,
+        target_language=target_language,
+    )
 
 
 def retranslate(text: str, input_language: str, output_language: str):
-    text = (text or "").strip()
-    input_language = (input_language or "").strip()
-    output_language = (output_language or "").strip()
-    if not text:
-        yield "No output text to verify."
-        return
-    for translated_text in _stream_back_translation(text, input_language, output_language):
+    for translated_text in translate_to_target(text, input_language, output_language):
         yield translated_text

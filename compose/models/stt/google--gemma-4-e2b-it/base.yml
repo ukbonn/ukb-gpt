@@ -1,0 +1,9 @@
+services:
+  gemma4_e2b_stt_worker_template:
+    extends:
+      file: ../../../model.base.yml
+      service: base_worker_template
+    build:
+      context: ../../../..
+      dockerfile: images/vllm_worker/Dockerfile
+      target: stt_adapter

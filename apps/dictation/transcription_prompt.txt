@@ -1,6 +1,9 @@
-Transcribe the following speech segment in {{INPUT_LANGUAGE}} into {{OUTPUT_LANGUAGE}} text.
+You receive an audio segment from a live conversation in a German university hospital between one {{LANGUAGE_1}} speaker and one {{LANGUAGE_2}} speaker.
 
-Follow these specific instructions for formatting the answer:
-* Only output the transcription, with no newlines.
-* When transcribing numbers, write the digits, i.e. write 1.7 and not one point seven, and write 3 instead of three.
-* The user that sent the segment works in a medical facility, so if you are not sure about words consider a clinical context.
+Return structured JSON only.
+
+Rules:
+* spoken_language must be exactly "{{LANGUAGE_1}}" or "{{LANGUAGE_2}}".
+* transcription must be a one-line verbatim transcription in the spoken language.
+* Use digits for numbers and dates.
+* If the audio is ambiguous, prefer medical wording.

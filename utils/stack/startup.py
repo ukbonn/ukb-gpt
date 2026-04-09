@@ -1625,6 +1625,23 @@ def _apply_dataset_structuring_resource_defaults() -> None:
     )
 
 
+def _resolve_repo_or_absolute_path(path_value: str) -> str:
+    expanded = os.path.expanduser(path_value.strip())
+    if os.path.isabs(expanded):
+        return os.path.abspath(expanded)
+    return os.path.abspath(os.path.join(ROOT_DIR, expanded))
+
+
+def _ensure_llm_structured_outputs_backend_xgrammar() -> None:
+    flag = "--structured-outputs-config.backend=xgrammar"
+    current = env_str("VLLM_LLM_COMMAND_APPEND")
+    tokens = shlex.split(current) if current else []
+    if flag in tokens:
+        return
+    os.environ["VLLM_LLM_COMMAND_APPEND"] = f"{current} {flag}".strip()
+    print("🔒 Info: Enabled xgrammar structured outputs for the LLM worker profile.")
+
+
 def setup_logging(log_dir=None, *, announce=True, show_session_header=True):
     """
     Sets up logging to both stdout and a single startup log file.
@@ -1797,6 +1814,7 @@ def validate_environment(selection: SchemaRuntimeSelection | None = None) -> Sch
     api_egress_enabled = "api_egress" in selection.context.enabled_features
     dataset_structuring_enabled = "dataset_structuring" in selection.context.enabled_apps
     cohort_feasibility_enabled = "cohort_feasibility" in selection.context.enabled_apps
+    icd10_enabled = "icd_10_coding" in selection.context.enabled_apps
 
     additional_api = env_str("BATCH_CLIENT_MODE_ADDITIONAL_LOCAL_API_ADDRESS")
     additional_embedding_api = env_str("BATCH_CLIENT_MODE_ADDITIONAL_LOCAL_EMBEDDING_API_ADDRESS")
@@ -2184,6 +2202,63 @@ def validate_environment(selection: SchemaRuntimeSelection | None = None) -> Sch
 
             _apply_dataset_structuring_resource_defaults()
 
+    if icd10_enabled:
+        if batch_mode:
+            print("❌ Error: ENABLE_ICD_10_CODING_APP requires BATCH_CLIENT_MODE_ON=false.")
+            missing_config = True
+
+        if not env_str("MODEL_DEPLOYMENT_CONFIG"):
+            print("❌ Error: MODEL_DEPLOYMENT_CONFIG must be set when ENABLE_ICD_10_CODING_APP=true.")
+            missing_config = True
+
+        if not env_str("EMBEDDING_MODEL_DEPLOYMENT_CONFIG"):
+            print(
+                "❌ Error: EMBEDDING_MODEL_DEPLOYMENT_CONFIG must be set when "
+                "ENABLE_ICD_10_CODING_APP=true."
+            )
+            missing_config = True
+
+        raw_icd10_data_root = env_str("ICD10_DATA_ROOT") or _default_icd10_data_root()
+        resolved_icd10_data_root = _resolve_repo_or_absolute_path(raw_icd10_data_root)
+        runtime_uid_raw = env_str("OPENWEBUI_RUNTIME_UID")
+        runtime_gid_raw = env_str("OPENWEBUI_RUNTIME_GID")
+        runtime_uid_int = int(runtime_uid_raw) if runtime_uid_raw.isdigit() else -1
+        runtime_gid_int = int(runtime_gid_raw) if runtime_gid_raw.isdigit() else -1
+
+        try:
+            os.makedirs(resolved_icd10_data_root, exist_ok=True)
+        except OSError as exc:
+            print(
+                "❌ Error: Could not create ICD10_DATA_ROOT "
+                f"at {resolved_icd10_data_root}: {exc}"
+            )
+            missing_config = True
+        else:
+            if (
+                not missing_config
+                and runtime_uid_int > 0
+                and runtime_gid_int > 0
+                and not _has_dir_write_access_for_identity(
+                    resolved_icd10_data_root, runtime_uid_int, runtime_gid_int
+                )
+            ):
+                print(
+                    "❌ Error: ICD10_DATA_ROOT is not writable/executable by ICD runtime user "
+                    f"{runtime_uid_int}:{runtime_gid_int}: {resolved_icd10_data_root}"
+                )
+                missing_config = True
+            else:
+                ontology_path = os.path.join(
+                    resolved_icd10_data_root,
+                    "ICD-10-CODES_2025_structured.xlsx",
+                )
+                if not os.path.isfile(ontology_path):
+                    print(f"❌ Error: ICD10 ontology workbook is missing: {ontology_path}")
+                    missing_config = True
+                else:
+                    os.environ["ICD10_DATA_ROOT"] = resolved_icd10_data_root
+                    _ensure_llm_structured_outputs_backend_xgrammar()
+
     if missing_config:
         print("Startup aborted due to missing configuration.")
         sys.exit(1)
@@ -2346,6 +2421,32 @@ def _resolve_dictation_feature(batch_mode: bool, stt_deployment_config: str) -> 
     return True
 
 
+def _resolve_icd_10_coding_feature(
+    batch_mode: bool,
+    llm_deployment_config: str,
+    embedding_deployment_config: str,
+) -> bool:
+    enabled = env_bool("ENABLE_ICD_10_CODING_APP")
+    if not enabled:
+        print("🔸 [Feature] ICD-10 Coding App: DISABLED")
+        return False
+
+    if batch_mode:
+        print("❌ Error: ENABLE_ICD_10_CODING_APP requires chatbot provider mode (BATCH_CLIENT_MODE_ON=false).")
+        sys.exit(1)
+
+    if not llm_deployment_config:
+        print("❌ Error: ENABLE_ICD_10_CODING_APP=true requires MODEL_DEPLOYMENT_CONFIG.")
+        sys.exit(1)
+
+    if not embedding_deployment_config:
+        print("❌ Error: ENABLE_ICD_10_CODING_APP=true requires EMBEDDING_MODEL_DEPLOYMENT_CONFIG.")
+        sys.exit(1)
+
+    print("🔹 [Feature] ICD-10 Coding App: ENABLED")
+    return True
+
+
 def _validate_batch_direct_ports(batch_mode: bool) -> None:
     if not batch_mode:
         return
@@ -2456,6 +2557,7 @@ def assemble_compose_args(selection: SchemaRuntimeSelection | None = None) -> St
     enable_dataset_structuring_app = selection.enabled_apps.get("dataset_structuring", False)
     enable_cohort_feasibility_app = selection.enabled_apps.get("cohort_feasibility", False)
     enable_dictation_app = selection.enabled_apps.get("dictation", False)
+    enable_icd10_app = selection.enabled_apps.get("icd_10_coding", False)
     if enable_dataset_structuring_app:
         print("🔹 [Feature] Dataset Structuring App: ENABLED")
     else:
@@ -2468,6 +2570,14 @@ def assemble_compose_args(selection: SchemaRuntimeSelection | None = None) -> St
         _resolve_dictation_feature(batch_mode, deployment_bundle.stt_deployment_config)
     else:
         print("🔸 [Feature] Dictation App: DISABLED")
+    if enable_icd10_app:
+        _resolve_icd_10_coding_feature(
+            batch_mode,
+            deployment_bundle.llm_deployment_config,
+            deployment_bundle.embedding_deployment_config,
+        )
+    else:
+        print("🔸 [Feature] ICD-10 Coding App: DISABLED")
     _validate_batch_direct_ports(batch_mode)
 
     if batch_mode:
@@ -2796,6 +2906,16 @@ def discover_backends(
     os.environ["BYPASS_ROUTER"] = fallback_bypass
     os.environ["VLLM_ENDPOINT"] = primary_endpoint
     os.environ["PRIMARY_OPENAI_ENDPOINT"] = primary_endpoint
+
+    llm_model_id = env_str("LLM_MODEL_ID") or _resolved_model_id_for_role(resolved_deployments, "llm")
+    if llm_model_id and not env_str("LLM_MODEL_ID"):
+        os.environ["LLM_MODEL_ID"] = llm_model_id
+
+    embedding_model_id = env_str("EMBEDDING_MODEL_ID") or _resolved_model_id_for_role(
+        resolved_deployments, "embedding"
+    )
+    if embedding_model_id and not env_str("EMBEDDING_MODEL_ID"):
+        os.environ["EMBEDDING_MODEL_ID"] = embedding_model_id
 
     openai_base_urls = []
     if llm.endpoint:

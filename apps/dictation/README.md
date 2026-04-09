@@ -1,6 +1,6 @@
 # Dictation App
 
-Optional internal Gradio UI for speech-to-text transcription, translation, verification via back-translation, and translated-text read-aloud.
+Optional internal Gradio UI for low-latency two-language conversation transcription, translation, and optional translated-text read-aloud.
 
 ## Enable
 
@@ -14,11 +14,14 @@ The app is exposed only through ingress at `https://<SERVER_NAME>/dictation/`.
 
 ## Workflow
 
-- `Input language`: language spoken by the speaker
-- `Output language`: language you want in the primary output box
-- leave `Output language` empty for a same-language transcription
-- if `Output language` differs from `Input language`, the app fills the primary output box with the translated text and the verification box with a back-translation into the input language
-- after editing the primary output manually, use `Refresh Verification` to regenerate the confirmation text without retranscribing the audio
+- `Language 1` and `Language 2` define the conversation pair
+- microphone recording updates the spoken-language transcript while the user speaks
+- stopping the recording or uploading audio finalizes the transcript and then translates automatically
+- the app detects whether the segment was spoken in `Language 1` or `Language 2`
+- the primary output box shows the translation in the other language
+- the transcript box shows editable source-language text for correction
+- `Refresh Translation` regenerates the translated output from the corrected transcript
+- `Thinking mode (better but slower)` affects only the final translation pass, not the live transcript updates
 
 Optional translated-text read-aloud:
 

@@ -26,6 +26,8 @@ FROM base AS stt_adapter
 
 WORKDIR /app
 COPY apps/multimodal_stt_adapter/app.py /app/multimodal_stt_adapter.py
+COPY apps/common/__init__.py /app/apps/common/__init__.py
+COPY apps/common/stt_contract.py /app/apps/common/stt_contract.py
 
 ENTRYPOINT ["/usr/local/bin/active_isolation_monitoring_entrypoint.sh", "python3", "/app/multimodal_stt_adapter.py"]
 

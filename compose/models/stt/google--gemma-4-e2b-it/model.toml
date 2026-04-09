@@ -1,11 +1,11 @@
 [model]
-id = "model.stt.google_gemma_4_e4b_it"
+id = "model.stt.google_gemma_4_e2b_it"
 role = "stt"
-title = "Google Gemma-4-E4B-it"
-summary = "Gemma 4 E4B multimodal STT adapter family that keeps OpenAI transcription compatibility while exposing the same backend for fast audio, image, and video chat."
-base_compose_file = "compose/models/stt/google--gemma-4-e4b-it/base.yml"
-base_service = "gemma4_e4b_stt_worker_template"
-order = 20
+title = "Google Gemma-4-E2B-it"
+summary = "Compact Gemma 4 E2B multimodal STT adapter family for faster OpenAI-compatible audio transcription plus lightweight chat exposure."
+base_compose_file = "compose/models/stt/google--gemma-4-e2b-it/base.yml"
+base_service = "gemma4_e2b_stt_worker_template"
+order = 19
 wizard_enabled = true
 accelerator = "nvidia"
 supports_expert_parallel = false
@@ -15,7 +15,7 @@ expose_in_provider_api = true
 command = [
   "--host=127.0.0.1",
   "--port=5001",
-  "--model=google/gemma-4-E4B-it",
+  "--model=google/gemma-4-E2B-it",
   "--max-model-len=${VLLM_STT_MAX_MODEL_LEN:-131072}",
   "--gpu-memory-utilization=${VLLM_STT_GPU_MEMORY_UTILIZATION:-0.85}",
   "--enable-auto-tool-choice",
@@ -26,7 +26,7 @@ command = [
   '--limit-mm-per-prompt={"image":1,"audio":1,"video":1}',
   "--async-scheduling",
 ]
-environment = { MULTIMODAL_STT_ADAPTER_PORT = "5000", MULTIMODAL_STT_INNER_PORT = "5001", MULTIMODAL_STT_SERVED_MODEL = "google/gemma-4-E4B-it", MULTIMODAL_STT_TRANSCRIPTION_MAX_TOKENS = "${MULTIMODAL_STT_TRANSCRIPTION_MAX_TOKENS:-2048}" }
+environment = { MULTIMODAL_STT_ADAPTER_PORT = "5000", MULTIMODAL_STT_INNER_PORT = "5001", MULTIMODAL_STT_SERVED_MODEL = "google/gemma-4-E2B-it", MULTIMODAL_STT_TRANSCRIPTION_MAX_TOKENS = "${MULTIMODAL_STT_TRANSCRIPTION_MAX_TOKENS:-2048}" }
 default_vllm_openai_image = "vllm/vllm-openai:gemma4-cu130"
 build_args = { VLLM_OPENAI_IMAGE = "${VLLM_OPENAI_IMAGE_STT:-vllm/vllm-openai:gemma4-cu130}", EXTRA_PIP_PACKAGES = "${VLLM_STT_EXTRA_PIP_PACKAGES:-av soxr librosa soundfile}" }
 shm_size = "16gb"
@@ -37,7 +37,7 @@ shm_size = "16gb"
 id = "VLLM_OPENAI_IMAGE_STT"
 prompt_order = 10
 prompt = true
-description = "Worker image override for this Gemma E4B STT family."
+description = "Worker image override for this Gemma E2B STT family."
 examples = ["vllm/vllm-openai:gemma4-cu130"]
 
 [[variables]]

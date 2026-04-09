@@ -1015,6 +1015,39 @@ prompt_order = 10
 prompt = false
 required_when_all = ["app:dictation"]
 
+[vars.ENABLE_ICD_10_CODING_APP]
+type = "bool"
+default = "false"
+secret = false
+description = "Enable ICD-10 coding API overlay (chatbot provider mode only)."
+examples = ["true", "false"]
+validators = ["bool"]
+
+[[vars.ENABLE_ICD_10_CODING_APP.bindings]]
+overlay = "base.runtime"
+prompt_order = 225
+prompt = false
+
+[[vars.ENABLE_ICD_10_CODING_APP.bindings]]
+overlay = "app.icd_10_coding"
+prompt_order = 10
+prompt = false
+required_when_all = ["app:icd_10_coding"]
+
+[vars.ICD10_DATA_ROOT]
+type = "path"
+default = "apps/icd_10_coding/RAW_UNCLEAN_CODE/data"
+secret = false
+description = "Host path mounted into the ICD-10 app for the ontology workbook and generated RAG artifacts."
+examples = ["apps/icd_10_coding/RAW_UNCLEAN_CODE/data", "/absolute/path/to/icd10_data"]
+validators = ["directory"]
+
+[[vars.ICD10_DATA_ROOT.bindings]]
+overlay = "app.icd_10_coding"
+prompt_order = 20
+prompt = true
+required_when_all = ["app:icd_10_coding"]
+
 [vars.STT_MODEL_ID]
 type = "string"
 default = "mistralai/Voxtral-Mini-4B-Realtime-2602"
@@ -1332,13 +1365,14 @@ summary = "Interactive deployment with OpenWebUI and HTTPS ingress."
 doc_path = "docs/modes/chatbot-provider.md"
 availability_modes = ["chatbot_provider"]
 compatible_features = ["rate_limiting", "ldap", "metrics", "chat_purger", "embedding_backend", "stt_backend", "tts_backend"]
-compatible_apps = ["dictation"]
+compatible_apps = ["dictation", "icd_10_coding"]
 services = ["frontend"]
 use_when = [
   "browser access through OpenWebUI is required",
   "HTTPS termination is required at ingress",
   "LDAP-backed user authentication may be enabled",
-  "the optional dictation UI should be reachable via ingress"
+  "the optional dictation UI should be reachable via ingress",
+  "optional internal HTTPS APIs such as ICD-10 coding should be reachable via ingress"
 ]
 behavior = [
   "ingress publishes 0.0.0.0:80 and 0.0.0.0:443",
@@ -1355,7 +1389,8 @@ verify = [
 access = [
   "WebUI: https://<SERVER_NAME>/",
   "Grafana (when metrics enabled): https://<SERVER_NAME>/grafana/",
-  "Dictation (when enabled): https://<SERVER_NAME>/dictation/"
+  "Dictation (when enabled): https://<SERVER_NAME>/dictation/",
+  "ICD-10 Coding API (when enabled): https://<SERVER_NAME>/api/v1/icd10/"
 ]
 
 [[overlays]]
@@ -1717,4 +1752,36 @@ verify = [
 ]
 access = [
   "Dictation: https://<SERVER_NAME>/dictation/"
+]
+
+[[overlays]]
+id = "app.icd_10_coding"
+name = "icd_10_coding"
+kind = "app"
+order = 61
+compose_file = "compose/apps/icd_10_coding.yml"
+title = "ICD-10 Coding App"
+summary = "Internal ICD-10 coding API exposed through ingress under /api/v1/icd10/."
+doc_path = "docs/apps/icd-10-coding.md"
+availability_modes = ["chatbot_provider"]
+toggle_var = "ENABLE_ICD_10_CODING_APP"
+services = ["icd_10_coding"]
+use_when = [
+  "an authenticated ICD-10 coding API is required in chatbot provider mode"
+]
+behavior = [
+  "the API is exposed only via ingress path /api/v1/icd10/",
+  "incoming Bearer tokens are validated against the internal OpenWebUI frontend",
+  "the app auto-builds and reuses a local ICD knowledge base under ICD10_DATA_ROOT/ICD-10-RAG",
+  "ENABLE_ICD_10_CODING_APP requires both MODEL_DEPLOYMENT_CONFIG and EMBEDDING_MODEL_DEPLOYMENT_CONFIG",
+  "LLM structured outputs should use VLLM_LLM_COMMAND_APPEND=--structured-outputs-config.backend=xgrammar"
+]
+verify = [
+  "confirm startup reports the ICD-10 coding app enabled",
+  "open https://<SERVER_NAME>/api/v1/icd10/health",
+  "call GET /api/v1/icd10/status with an OpenWebUI Bearer token",
+  "if startup fails, verify MODEL_DEPLOYMENT_CONFIG, EMBEDDING_MODEL_DEPLOYMENT_CONFIG, and ICD10_DATA_ROOT"
+]
+access = [
+  "ICD-10 Coding API: https://<SERVER_NAME>/api/v1/icd10/"
 ]

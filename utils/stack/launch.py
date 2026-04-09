@@ -247,7 +247,16 @@ def _start_service_batch(
     print_subprocess_output: Callable[[subprocess.CompletedProcess], None],
     port_listener_diagnostics_callback: Callable[[bool], None] | None,
 ) -> None:
-    start_cmd = ["docker", "compose", *compose_args, "start", *services]
+    start_cmd = [
+        "docker",
+        "compose",
+        *compose_args,
+        "up",
+        "-d",
+        "--no-build",
+        "--no-deps",
+        *services,
+    ]
     print(f"  [EXEC] {format_cmd(start_cmd)}")
     result = subprocess.run(start_cmd, capture_output=True, text=True)
     print_subprocess_output(result)

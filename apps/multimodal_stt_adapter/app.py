@@ -14,6 +14,12 @@ import requests
 from fastapi import FastAPI, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 
+from apps.common.stt_contract import (
+    canonicalize_conversation_language,
+    parse_structured_transcription,
+    transcription_response_format,
+)
+
 try:
     import uvicorn
 except ModuleNotFoundError:  # pragma: no cover - exercised in local test envs
@@ -41,9 +47,10 @@ TRANSCRIPTION_MAX_TOKENS = int(
 
 _DEFAULT_TRANSCRIPTION_PROMPT = (
     "Provide a verbatim, word-for-word transcription of the audio. "
-    "Output only the transcription on one line. Use digits for numbers."
+    "Return structured JSON only. "
+    "The transcription must stay on one line, use digits for numbers and dates, "
+    "and prefer medical wording if the audio is ambiguous."
 )
-_FINAL_ANSWER_MARKER = "FINAL_ANSWER:"
 _HOP_BY_HOP_HEADERS = {
     "connection",
     "content-length",
@@ -81,19 +88,15 @@ def _build_transcription_prompt(*, prompt: str, language: str) -> str:
         if not language:
             base_prompt = _DEFAULT_TRANSCRIPTION_PROMPT
         else:
+            preferred_language = canonicalize_conversation_language(language, "English")
             base_prompt = (
-                f"Provide a verbatim, word-for-word transcription of the audio in {language}. "
-                "Output only the transcription on one line. Use digits for numbers."
+                f"Provide a verbatim, word-for-word transcription of the audio. "
+                f"If the spoken language is clear, prefer {preferred_language}. "
+                "Return structured JSON only. "
+                "The transcription must stay on one line, use digits for numbers and dates, "
+                "and prefer medical wording if the audio is ambiguous."
             )
-
-    if _FINAL_ANSWER_MARKER in base_prompt:
-        return base_prompt
-    return (
-        f"{base_prompt}\n\n"
-        "You may think step by step before answering.\n"
-        f"End with exactly one line in this format: {_FINAL_ANSWER_MARKER} <text>\n"
-        "Do not add any text after that final line."
-    )
+    return base_prompt
 
 
 def build_transcription_chat_payload(
@@ -133,7 +136,8 @@ def build_transcription_chat_payload(
         "stream": False,
         "temperature": 0.0,
         "max_tokens": TRANSCRIPTION_MAX_TOKENS,
-        "chat_template_kwargs": {"enable_thinking": True},
+        "chat_template_kwargs": {"enable_thinking": False},
+        "response_format": transcription_response_format("adapter_transcription"),
     }
 
 
@@ -151,35 +155,12 @@ def extract_transcription_text(payload: dict[str, object]) -> str:
         raise ValueError("Gemma STT backend returned no assistant message.")
 
     content = message.get("content")
-    def _extract_final_answer(raw_text: str) -> str:
-        normalized = raw_text.replace("\r\n", "\n").strip()
-        if not normalized:
-            return ""
-        marker_index = normalized.rfind(_FINAL_ANSWER_MARKER)
-        if marker_index != -1:
-            final_segment = normalized[marker_index + len(_FINAL_ANSWER_MARKER) :].strip()
-            if final_segment:
-                return final_segment.splitlines()[0].strip()
-        lines = [line.strip() for line in normalized.splitlines() if line.strip()]
-        if not lines:
-            return ""
-        for candidate in reversed(lines):
-            lowered = candidate.casefold()
-            if lowered == "thought":
-                continue
-            if lowered.startswith("here's a thinking process") or lowered.startswith(
-                "here is a thinking process"
-            ):
-                continue
-            if re.match(r"^(\d+\.|[-*])\s", candidate):
-                continue
-            return candidate
-        return lines[-1]
-
     if isinstance(content, str) and content.strip():
-        final_answer = _extract_final_answer(content)
-        if final_answer:
-            return final_answer
+        text = content.strip()
+        try:
+            return parse_structured_transcription(text).transcription
+        except ValueError:
+            return text
 
     if isinstance(content, list):
         parts: list[str] = []
@@ -190,9 +171,11 @@ def extract_transcription_text(payload: dict[str, object]) -> str:
             if isinstance(text, str) and text.strip():
                 parts.append(text.strip())
         if parts:
-            final_answer = _extract_final_answer("\n".join(parts))
-            if final_answer:
-                return final_answer
+            combined = "\n".join(parts).strip()
+            try:
+                return parse_structured_transcription(combined).transcription
+            except ValueError:
+                return combined
 
     raise ValueError("Gemma STT backend returned an empty transcription.")
 

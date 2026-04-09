@@ -77,6 +77,7 @@ from utils.stack.startup import (
     start_services,
 )
 from utils.stack.launch import BackendDiscovery
+from utils.stack.deployments import ensure_rendered_model_deployments
 
 GPU_PROBE_CMD = [
     "docker",
@@ -329,6 +330,10 @@ def _run_up_command(env_file: str | None = None):
     )
 
     print("\n--> Building Service Images...")
+    ensure_rendered_model_deployments(
+        startup_config.deployment_bundle.resolved_deployments,
+        root_dir=ROOT_DIR,
+    )
     build_cmd = [
         "docker",
         "compose",
@@ -342,13 +347,16 @@ def _run_up_command(env_file: str | None = None):
     run_command(build_cmd, silent=is_test)
 
     print("\n--> Creating Services (Paused)...")
+    ensure_rendered_model_deployments(
+        startup_config.deployment_bundle.resolved_deployments,
+        root_dir=ROOT_DIR,
+    )
     create_cmd = [
         "docker",
         "compose",
         *startup_config.compose_args,
         "up",
         "--no-start",
-        "--remove-orphans",
         "-y",
         *launch_services,
     ]
@@ -384,6 +392,10 @@ def _run_up_command(env_file: str | None = None):
     
     # 6. Launch
     print("\n--> Starting Services in Protected Network...")
+    ensure_rendered_model_deployments(
+        startup_config.deployment_bundle.resolved_deployments,
+        root_dir=ROOT_DIR,
+    )
     start_services(startup_config.compose_args, launch_plan, startup_config.batch_mode)
 
     _print_access_endpoints(startup_config.batch_mode, discovery=discovery)

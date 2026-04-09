@@ -23,6 +23,7 @@ from tests.helpers.docker import (
     inspect_container,
     wait_for_container_health,
 )
+from tests.helpers.icd10 import create_test_icd10_workbook
 from tests.helpers.pki import create_test_pki
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -60,6 +61,14 @@ HTTPS_MONITOR_HELPER_CHATBOT_PROVIDER_COMPOSE_FILES = (
     REPO_ROOT / "compose/features/ldap.yml",
     TESTS_ROOT / "compose.test.helper_frontend_https_monitor.yml",
 )
+ICD10_CHATBOT_PROVIDER_COMPOSE_FILES = (
+    REPO_ROOT / "compose/base.yml",
+    REPO_ROOT / "compose/modes/frontend.provider.yml",
+    REPO_ROOT / "compose/features/dmz_egress.yml",
+    REPO_ROOT / "compose/features/ldap.yml",
+    REPO_ROOT / "compose/apps/icd_10_coding.yml",
+    TESTS_ROOT / "compose.test.icd10_mock_llm.yml",
+)
 BATCH_CLIENT_COMPOSE_FILES = (
     REPO_ROOT / "compose/base.yml",
     REPO_ROOT / "compose/modes/batch.client.yml",
@@ -95,6 +104,10 @@ def _https_monitor_helper_chatbot_provider_compose_flags(
     env: Optional[Dict[str, str]] = None,
 ) -> list[str]:
     return _compose_flags_for_model_stack(HTTPS_MONITOR_HELPER_CHATBOT_PROVIDER_COMPOSE_FILES, env=env)
+
+
+def _icd10_chatbot_provider_compose_flags(env: Optional[Dict[str, str]] = None) -> list[str]:
+    return _compose_flags_for_model_stack(ICD10_CHATBOT_PROVIDER_COMPOSE_FILES, env=env)
 
 
 def _batch_client_compose_flags(env: Optional[Dict[str, str]] = None) -> list[str]:
@@ -790,6 +803,97 @@ def _launch_https_monitor_helper_chatbot_provider_stack(tmp_path_factory) -> Man
         raise
 
 
+def _launch_icd10_chatbot_provider_stack(tmp_path_factory) -> ManagedStackInstance:
+    ports = _allocate_chatbot_provider_ports()
+    artifacts_dir, env, log_dir = _prepare_stack_environment(
+        tmp_path_factory,
+        mode="chatbot_provider_icd10",
+        mode_label="Chatbot provider ICD-10",
+        overrides={
+            "BATCH_CLIENT_MODE_ON": "false",
+            "ENABLE_LDAP": "true",
+            "ENABLE_INTERNAL_METRICS": "false",
+            "ENABLE_METRICS_FORWARDING": "false",
+            "ENABLE_ICD_10_CODING_APP": "true",
+            "ICD10_BUILD_RETRY_SECONDS": "5",
+            "EMBEDDING_MODEL_DEPLOYMENT_CONFIG": "tests/model_deployments/mock-embedding.toml",
+            "UKBGPT_EXTRA_COMPOSE_FILES": "tests/compose.test.icd10_mock_llm.yml",
+            "INGRESS_HTTP_BIND_IP": "127.0.0.1",
+            "INGRESS_HTTP_PORT": str(ports.http_port),
+            "INGRESS_HTTPS_BIND_IP": "127.0.0.1",
+            "INGRESS_HTTPS_PORT": str(ports.https_port),
+            "INGRESS_METRICS_BIND_IP": "127.0.0.1",
+            "INGRESS_METRICS_PORT_START": str(ports.diagnostic_port),
+            "INGRESS_METRICS_PORT_END": str(ports.diagnostic_port_end),
+            "INGRESS_EXPORTER_BIND_IP": "127.0.0.1",
+            "INGRESS_EXPORTER_PORT": str(ports.ingress_exporter_port),
+        },
+    )
+    icd10_data_root = artifacts_dir / "icd10-data"
+    create_test_icd10_workbook(icd10_data_root / "ICD-10-CODES_2025_structured.xlsx")
+    env["ICD10_DATA_ROOT"] = str(icd10_data_root)
+
+    def _cleanup() -> None:
+        _teardown_stack(
+            mode_label="Chatbot provider ICD-10",
+            primary_compose_flags_factory=_icd10_chatbot_provider_compose_flags,
+            primary_env=env,
+            log_dir=log_dir,
+            extra_log_targets=[
+                (MOCK_LDAP_COMPOSE_FLAGS, "mock_ldap_", env),
+            ],
+            extra_down_targets=[
+                (MOCK_LDAP_COMPOSE_FLAGS, env),
+            ],
+        )
+
+    try:
+        LOGGER.info("Chatbot provider ICD-10 stack: starting mock LDAP")
+        assert_ok(
+            compose(MOCK_LDAP_COMPOSE_FLAGS, ["up", "-d"], env=env),
+            "Failed to start mock LDAP stack",
+        )
+        LOGGER.info("Chatbot provider ICD-10 stack: launching main stack")
+        _start_stack(env)
+        assert_ok(
+            compose(
+                _icd10_chatbot_provider_compose_flags(env),
+                ["up", "-d", "--build", "icd10_mock_llm"],
+                env=env,
+            ),
+            "Failed to start ICD-10 mock LLM service",
+        )
+        _assert_containers_running(
+            [
+                "ukbgpt_ingress",
+                "ukbgpt_frontend",
+                "ukbgpt_ldap_egress",
+                "ukbgpt_worker_0",
+                "ukbgpt_embedding_worker_0",
+                "ukbgpt_icd_10_coding",
+                "ukbgpt_icd10_mock_llm",
+            ]
+        )
+
+        context = StackContext(
+            mode="chatbot_provider",
+            artifacts_dir=artifacts_dir,
+            server_name=env.get("SERVER_NAME", "localhost"),
+            batch_port=None,
+            env=env,
+            log_dir=log_dir,
+            http_port=ports.http_port,
+            https_port=ports.https_port,
+            diagnostic_port=ports.diagnostic_port,
+            diagnostic_port_end=ports.diagnostic_port_end,
+            ingress_exporter_port=ports.ingress_exporter_port,
+        )
+        return ManagedStackInstance(context=context, cleanup=_cleanup)
+    except Exception:
+        _cleanup()
+        raise
+
+
 def _launch_batch_client_stack(tmp_path_factory) -> ManagedStackInstance:
     artifacts_dir, env, log_dir = _prepare_stack_environment(
         tmp_path_factory,
@@ -914,6 +1018,7 @@ class StackRuntimeManager:
             "helper_chatbot_provider": _launch_helper_chatbot_provider_stack,
             "icmp_monitor_helper_chatbot_provider": _launch_icmp_monitor_helper_chatbot_provider_stack,
             "https_monitor_helper_chatbot_provider": _launch_https_monitor_helper_chatbot_provider_stack,
+            "icd10_chatbot_provider": _launch_icd10_chatbot_provider_stack,
             "batch_client": _launch_batch_client_stack,
         }
         try:
@@ -997,6 +1102,10 @@ def https_monitor_helper_chatbot_provider_stack(stack_runtime) -> StackContext:
 
 
 @pytest.fixture
+def icd10_chatbot_provider_stack(stack_runtime) -> StackContext:
+    return stack_runtime.get("icd10_chatbot_provider")
+
+
+@pytest.fixture
 def batch_client_stack(stack_runtime) -> StackContext:
     return stack_runtime.get("batch_client")
-
